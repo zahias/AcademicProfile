@@ -5,7 +5,6 @@ import AdminDashboard from "./AdminDashboard";
 import StatsOverview from "./StatsOverview";
 import ResearchTopics from "./ResearchTopics";
 import Publications from "./Publications";
-import CareerTimeline from "./CareerTimeline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { ResearcherProfile } from "@shared/schema";
@@ -120,7 +119,6 @@ export default function ResearcherProfile() {
       <StatsOverview openalexId={profile?.openalexId || ''} />
       <ResearchTopics openalexId={profile?.openalexId || ''} />
       <Publications openalexId={profile?.openalexId || ''} />
-      <CareerTimeline openalexId={profile?.openalexId || ''} />
 
       {/* Footer */}
       <footer className="bg-card border-t border-border py-12">
@@ -140,7 +138,6 @@ export default function ResearcherProfile() {
               <ul className="space-y-2 text-sm">
                 <li><a href="#research" className="text-muted-foreground hover:text-accent transition-colors">Research Areas</a></li>
                 <li><a href="#publications" className="text-muted-foreground hover:text-accent transition-colors">Publications</a></li>
-                <li><a href="#timeline" className="text-muted-foreground hover:text-accent transition-colors">Career Timeline</a></li>
               </ul>
             </div>
             
