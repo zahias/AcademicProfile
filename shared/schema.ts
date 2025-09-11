@@ -8,6 +8,7 @@ import {
   integer,
   text,
   boolean,
+  date,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -43,6 +44,11 @@ export const researcherProfiles = pgTable("researcher_profiles", {
   title: text("title"),
   bio: text("bio"),
   cvUrl: varchar("cv_url"),
+  // Current affiliation fields (manually entered)
+  currentAffiliation: text("current_affiliation"),
+  currentPosition: text("current_position"),
+  currentAffiliationUrl: varchar("current_affiliation_url"),
+  currentAffiliationStartDate: date("current_affiliation_start_date"),
   isPublic: boolean("is_public").default(true),
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
