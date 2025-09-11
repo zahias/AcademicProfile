@@ -1,51 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
 import { OpenAlexService } from "./services/openalexApi";
-import { insertResearcherProfileSchema, updateResearcherProfileSchema, type ResearchTopic, type Publication, type Affiliation } from "@shared/schema";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
-import { listTemplates, getTemplate, getTemplateModTime } from "./fileData";
-import { z } from "zod";
+import { listTemplates, getTemplate } from "./fileData";
 
 // Security utility functions for safe HTML generation
-
-// Test function to verify XSS protection
-function testXSSProtection() {
-  const maliciousInputs = [
-    '<script>alert("XSS")</script>',
-    '"><script>alert("XSS")</script>',
-    'javascript:alert("XSS")',
-    '<img src=x onerror=alert("XSS")>',
-    '<svg onload=alert("XSS")>',
-    '&lt;script&gt;alert("XSS")&lt;/script&gt;'
-  ];
-
-  console.log('🔒 Testing XSS Protection...');
-  
-  maliciousInputs.forEach((input, index) => {
-    const escaped = escapeHtml(input);
-    const attributeEscaped = escapeHtmlAttribute(input);
-    const urlSanitized = validateAndSanitizeUrl(input);
-    
-    console.log(`Test ${index + 1}:`);
-    console.log(`  Input: ${input}`);
-    console.log(`  HTML Escaped: ${escaped}`);
-    console.log(`  Attribute Escaped: ${attributeEscaped}`);
-    console.log(`  URL Sanitized: ${urlSanitized}`);
-    console.log('  ---');
-  });
-
-  // Test that valid URLs still work
-  const validUrls = ['https://example.com', '/path/to/page', '#anchor'];
-  console.log('Valid URL tests:');
-  validUrls.forEach(url => {
-    console.log(`  ${url} -> ${validateAndSanitizeUrl(url)}`);
-  });
-  
-  console.log('✅ XSS Protection tests completed');
-}
 function escapeHtml(unsafe: string | undefined | null): string {
   if (!unsafe) return '';
   return String(unsafe)
@@ -168,7 +126,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Research Areas</h2>
             <div class="flex flex-wrap gap-3 justify-center">
-                ${topics.slice(0, 15).map((topic: ResearchTopic) => `
+                ${topics.slice(0, 15).map((topic: any) => `
                     <span class="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
                         ${escapeHtml(topic.displayName)} (${escapeHtml(String(topic.count))})
                     </span>
@@ -184,7 +142,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Recent Publications</h2>
             <div class="space-y-6">
-                ${publications.slice(0, 10).map((pub: Publication) => `
+                ${publications.slice(0, 10).map((pub: any) => `
                     <div class="publication-card bg-white rounded-lg p-6 shadow-sm border">
                         <h3 class="text-xl font-semibold mb-2 text-gray-900">${escapeHtml(pub.title)}</h3>
                         ${pub.authorNames ? `<p class="text-gray-600 mb-2">${escapeHtml(pub.authorNames)}</p>` : ''}
@@ -208,7 +166,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Institutional Affiliations</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                ${affiliations.map((aff: Affiliation) => `
+                ${affiliations.map((aff: any) => `
                     <div class="bg-gray-50 rounded-lg p-6">
                         <h3 class="font-semibold text-lg mb-2">${escapeHtml(aff.institutionName)}</h3>
                         ${aff.institutionType ? `<p class="text-gray-600 mb-2">${escapeHtml(aff.institutionType)}</p>` : ''}
@@ -260,177 +218,9 @@ function generateStaticHTML(data: any): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
-
   const openalexService = new OpenAlexService();
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  // Researcher profile routes
-  app.get('/api/researcher/profile', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const profile = await storage.getResearcherProfile(userId);
-      res.json(profile || null);
-    } catch (error) {
-      console.error("Error fetching researcher profile:", error);
-      res.status(500).json({ message: "Failed to fetch researcher profile" });
-    }
-  });
-
-  app.post('/api/researcher/profile', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const profileData = insertResearcherProfileSchema.parse({
-        ...req.body,
-        userId
-      });
-      
-      const profile = await storage.upsertResearcherProfile(profileData);
-      
-      // Trigger initial data sync from OpenAlex (non-blocking)
-      if (profile.openalexId) {
-        openalexService.syncResearcherData(profile.openalexId).catch(error => {
-          console.error(`Failed to sync OpenAlex data for ${profile.openalexId}:`, error);
-          // Don't fail the profile creation - sync can be attempted later
-        });
-      }
-      
-      res.json(profile);
-    } catch (error) {
-      console.error("Error creating researcher profile:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to create researcher profile" });
-      }
-    }
-  });
-
-  app.put('/api/researcher/profile/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const profileId = req.params.id;
-      
-      // Verify profile ownership
-      const existingProfile = await storage.getResearcherProfile(userId);
-      if (!existingProfile || existingProfile.id !== profileId) {
-        return res.status(403).json({ message: "Unauthorized" });
-      }
-      
-      const updates = updateResearcherProfileSchema.parse({
-        ...req.body,
-        id: profileId
-      });
-      
-      const profile = await storage.updateResearcherProfile(profileId, updates);
-      res.json(profile);
-    } catch (error) {
-      console.error("Error updating researcher profile:", error);
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to update researcher profile" });
-      }
-    }
-  });
-
-  // Get all public researcher profiles for directory
-  app.get('/api/researchers/public', async (req, res) => {
-    try {
-      const profiles = await storage.getAllPublicResearcherProfiles();
-      
-      // Get basic stats for each researcher
-      const profilesWithStats = await Promise.all(
-        profiles.map(async (profile) => {
-          const researcherData = await storage.getOpenalexData(profile.openalexId, 'researcher');
-          const data = researcherData?.data as any; // OpenAlex API response structure
-          return {
-            ...profile,
-            stats: data ? {
-              worksCount: data.works_count || 0,
-              citedByCount: data.cited_by_count || 0,
-              hIndex: data.summary_stats?.h_index || 0,
-              i10Index: data.summary_stats?.i10_index || 0,
-            } : null
-          };
-        })
-      );
-      
-      res.json(profilesWithStats);
-    } catch (error) {
-      console.error("Error fetching public researcher profiles:", error);
-      res.status(500).json({ message: "Failed to fetch researcher profiles" });
-    }
-  });
-
-  // Public researcher data routes
-  app.get('/api/researcher/:openalexId/data', async (req, res) => {
-    try {
-      const { openalexId } = req.params;
-      
-      // Get researcher profile (if public)
-      const profile = await storage.getResearcherProfileByOpenalexId(openalexId);
-      if (!profile || !profile.isPublic) {
-        return res.status(404).json({ message: "Researcher not found or not public" });
-      }
-
-      // Get cached OpenAlex data
-      const researcherData = await storage.getOpenalexData(openalexId, 'researcher');
-      const researchTopics = await storage.getResearchTopics(openalexId);
-      const publications = await storage.getPublications(openalexId); // Get ALL publications for accurate analytics
-      const affiliations = await storage.getAffiliations(openalexId);
-
-      res.json({
-        profile,
-        researcher: researcherData?.data || null,
-        topics: researchTopics,
-        publications,
-        affiliations,
-        lastSynced: profile.lastSyncedAt
-      });
-    } catch (error) {
-      console.error("Error fetching researcher data:", error);
-      res.status(500).json({ message: "Failed to fetch researcher data" });
-    }
-  });
-
-  // Data sync routes
-  app.post('/api/researcher/sync', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const profile = await storage.getResearcherProfile(userId);
-      
-      if (!profile) {
-        return res.status(404).json({ message: "Researcher profile not found" });
-      }
-
-      await openalexService.syncResearcherData(profile.openalexId);
-      
-      // Update last synced timestamp
-      await storage.updateResearcherProfile(profile.id, {
-        lastSyncedAt: new Date()
-      });
-
-      res.json({ message: "Data sync completed successfully" });
-    } catch (error) {
-      console.error("Error syncing researcher data:", error);
-      res.status(500).json({ message: "Failed to sync researcher data" });
-    }
-  });
-
-  // Search researchers by OpenAlex ID
+  // Search OpenAlex by ID (used by frontend to validate templates)
   app.get('/api/openalex/search/:openalexId', async (req, res) => {
     try {
       const { openalexId } = req.params;
@@ -442,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Template routes (no authentication required)
+  // Template routes - the core functionality of the generator
   
   // Get all available templates
   app.get('/api/templates', async (req, res) => {
@@ -759,121 +549,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export researcher website as static HTML
-  app.get('/api/researcher/:openalexId/export', isAuthenticated, async (req: any, res) => {
-    try {
-      const { openalexId } = req.params;
-      const userId = req.user.claims.sub;
-      
-      // Verify ownership - user can only export their own profile
-      const profile = await storage.getResearcherProfile(userId);
-      if (!profile || profile.openalexId !== openalexId) {
-        return res.status(403).json({ message: "Unauthorized - you can only export your own profile" });
-      }
-
-      // Get all researcher data
-      const researcherData = await storage.getOpenalexData(openalexId, 'researcher');
-      const researchTopics = await storage.getResearchTopics(openalexId);
-      const publications = await storage.getPublications(openalexId);
-      const affiliations = await storage.getAffiliations(openalexId);
-
-      const exportData = {
-        profile,
-        researcher: researcherData?.data || null,
-        topics: researchTopics,
-        publications,
-        affiliations,
-        lastSynced: profile.lastSyncedAt,
-        exportedAt: new Date().toISOString(),
-        exportUrl: `${req.protocol}://${req.get('host')}/researcher/${openalexId}`
-      };
-
-      // Generate static HTML
-      const staticHTML = generateStaticHTML(exportData);
-      
-      // Set headers for file download
-      res.setHeader('Content-Type', 'text/html');
-      res.setHeader('Content-Disposition', `attachment; filename="${profile.displayName || 'researcher'}-profile.html"`);
-      res.send(staticHTML);
-    } catch (error) {
-      console.error("Error exporting researcher profile:", error);
-      res.status(500).json({ message: "Failed to export researcher profile" });
-    }
-  });
-
-  // CV Upload URL endpoint
-  app.post('/api/upload/cv/url', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const { filename } = req.body;
-      
-      if (!filename) {
-        return res.status(400).json({ message: 'Filename is required' });
-      }
-      
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getCVUploadURL(userId, filename);
-      
-      res.json({ uploadURL });
-    } catch (error) {
-      console.error('Error getting CV upload URL:', error);
-      res.status(500).json({ message: 'Failed to get upload URL' });
-    }
-  });
-
-  // CV Upload completion endpoint
-  app.put('/api/upload/cv/complete', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const { uploadURL } = req.body;
-      
-      if (!uploadURL) {
-        return res.status(400).json({ message: 'Upload URL is required' });
-      }
-      
-      const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        uploadURL,
-        {
-          owner: userId,
-          visibility: "private", // CV files should be private
-        },
-      );
-      
-      res.json({ objectPath, url: objectPath });
-    } catch (error) {
-      console.error('Error completing CV upload:', error);
-      res.status(500).json({ message: 'Failed to complete upload' });
-    }
-  });
-
-  // Serve CV files
-  app.get('/objects/:objectPath(*)', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const objectStorageService = new ObjectStorageService();
-      
-      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      const canAccess = await objectStorageService.canAccessObjectEntity({
-        objectFile,
-        userId: userId,
-        requestedPermission: ObjectPermission.READ,
-      });
-      
-      if (!canAccess) {
-        return res.status(403).json({ message: 'Access denied' });
-      }
-      
-      objectStorageService.downloadObject(objectFile, res);
-    } catch (error) {
-      console.error('Error serving file:', error);
-      if (error instanceof ObjectNotFoundError) {
-        return res.status(404).json({ message: 'File not found' });
-      }
-      return res.status(500).json({ message: 'Failed to serve file' });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
+  return createServer(app);
 }

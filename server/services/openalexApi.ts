@@ -136,7 +136,7 @@ export class OpenAlexService {
       try {
         researcher = await this.getResearcher(openalexId);
       } catch (error) {
-        if (error.message.includes('404')) {
+        if (error instanceof Error && error.message.includes('404')) {
           console.log(`OpenAlex researcher ${openalexId} not found (404) - skipping sync`);
           return; // Exit gracefully, don't fail profile creation
         }
@@ -189,7 +189,7 @@ export class OpenAlexService {
       try {
         worksResponse = await this.getResearcherWorks(openalexId);
       } catch (error) {
-        if (error.message.includes('404')) {
+        if (error instanceof Error && error.message.includes('404')) {
           console.log(`OpenAlex works for ${openalexId} not found (404) - skipping works sync`);
           return;
         }
