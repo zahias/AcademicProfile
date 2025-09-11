@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { OpenAlexService } from "./services/openalexApi";
-import { insertResearcherProfileSchema, updateResearcherProfileSchema } from "@shared/schema";
+import { insertResearcherProfileSchema, updateResearcherProfileSchema, type ResearchTopic, type Publication, type Affiliation } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { listTemplates, getTemplate, getTemplateModTime } from "./fileData";
@@ -168,7 +168,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Research Areas</h2>
             <div class="flex flex-wrap gap-3 justify-center">
-                ${topics.slice(0, 15).map(topic => `
+                ${topics.slice(0, 15).map((topic: ResearchTopic) => `
                     <span class="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
                         ${escapeHtml(topic.displayName)} (${escapeHtml(String(topic.count))})
                     </span>
@@ -184,7 +184,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Recent Publications</h2>
             <div class="space-y-6">
-                ${publications.slice(0, 10).map(pub => `
+                ${publications.slice(0, 10).map((pub: Publication) => `
                     <div class="publication-card bg-white rounded-lg p-6 shadow-sm border">
                         <h3 class="text-xl font-semibold mb-2 text-gray-900">${escapeHtml(pub.title)}</h3>
                         ${pub.authorNames ? `<p class="text-gray-600 mb-2">${escapeHtml(pub.authorNames)}</p>` : ''}
@@ -208,7 +208,7 @@ function generateStaticHTML(data: any): string {
         <div class="max-w-6xl mx-auto px-6">
             <h2 class="text-3xl font-bold mb-8 text-center">Institutional Affiliations</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                ${affiliations.map(aff => `
+                ${affiliations.map((aff: Affiliation) => `
                     <div class="bg-gray-50 rounded-lg p-6">
                         <h3 class="font-semibold text-lg mb-2">${escapeHtml(aff.institutionName)}</h3>
                         ${aff.institutionType ? `<p class="text-gray-600 mb-2">${escapeHtml(aff.institutionType)}</p>` : ''}
@@ -355,13 +355,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profilesWithStats = await Promise.all(
         profiles.map(async (profile) => {
           const researcherData = await storage.getOpenalexData(profile.openalexId, 'researcher');
+          const data = researcherData?.data as any; // OpenAlex API response structure
           return {
             ...profile,
-            stats: researcherData?.data ? {
-              worksCount: researcherData.data.works_count || 0,
-              citedByCount: researcherData.data.cited_by_count || 0,
-              hIndex: researcherData.data.summary_stats?.h_index || 0,
-              i10Index: researcherData.data.summary_stats?.i10_index || 0,
+            stats: data ? {
+              worksCount: data.works_count || 0,
+              citedByCount: data.cited_by_count || 0,
+              hIndex: data.summary_stats?.h_index || 0,
+              i10Index: data.summary_stats?.i10_index || 0,
             } : null
           };
         })
@@ -494,6 +495,267 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       res.status(500).json({ message: "Failed to fetch template" });
+    }
+  });
+
+  // Preview researcher profile from JSON template with live OpenAlex data
+  app.get('/api/preview/:slug', async (req, res) => {
+    try {
+      const { slug } = req.params;
+      
+      // Validate slug to prevent directory traversal attacks
+      if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+        return res.status(400).json({ message: "Invalid template slug. Only alphanumeric characters, hyphens, and underscores are allowed." });
+      }
+      
+      // Load template data from JSON file
+      const template = await getTemplate(slug);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      
+      const templateData = template.data;
+      
+      // Convert template data to profile format
+      const profile = {
+        displayName: templateData.name,
+        title: templateData.title || null,
+        bio: templateData.bio || null,
+        currentAffiliation: templateData.currentAffiliation || null,
+        openalexId: templateData.openalexId,
+        isPublic: templateData.isPublic !== false, // default to true
+        links: templateData.links || null,
+        theme: templateData.theme || null,
+        lastSyncedAt: null, // Live data, not cached
+      };
+
+      // Fetch live data from OpenAlex API
+      let researcher = null;
+      let topics: any[] = [];
+      let publications: any[] = [];
+      let affiliations: any[] = [];
+
+      try {
+        // Fetch researcher data
+        const researcherData = await openalexService.getResearcher(templateData.openalexId);
+        researcher = researcherData;
+
+        // Process research topics
+        if (researcherData.topics && researcherData.topics.length > 0) {
+          topics = researcherData.topics.map((topic: any) => ({
+            openalexId: templateData.openalexId,
+            topicId: topic.id,
+            displayName: topic.display_name,
+            count: topic.count,
+            subfield: topic.subfield.display_name,
+            field: topic.field.display_name,
+            domain: topic.domain.display_name,
+          }));
+        }
+
+        // Process affiliations
+        if (researcherData.affiliations && researcherData.affiliations.length > 0) {
+          affiliations = researcherData.affiliations.map((affiliation: any) => {
+            const sortedYears = affiliation.years.sort((a: number, b: number) => a - b);
+            return {
+              openalexId: templateData.openalexId,
+              institutionId: affiliation.institution.id,
+              institutionName: affiliation.institution.display_name,
+              institutionType: affiliation.institution.type,
+              countryCode: affiliation.institution.country_code,
+              years: affiliation.years,
+              startYear: sortedYears[0],
+              endYear: sortedYears[sortedYears.length - 1],
+            };
+          });
+        }
+
+        // Fetch and process publications/works
+        try {
+          const worksResponse = await openalexService.getResearcherWorks(templateData.openalexId);
+          if (worksResponse.results && worksResponse.results.length > 0) {
+            publications = worksResponse.results.map((work: any) => ({
+              openalexId: templateData.openalexId,
+              workId: work.id,
+              title: work.title,
+              authorNames: work.authorships.map((a: any) => a.author.display_name).join(', '),
+              journal: work.primary_location?.source?.display_name || null,
+              publicationYear: work.publication_year || null,
+              citationCount: work.cited_by_count || 0,
+              topics: work.topics ? work.topics.map((t: any) => t.display_name) : null,
+              doi: work.doi || null,
+              isOpenAccess: work.open_access?.is_oa || false,
+            }));
+          }
+        } catch (worksError) {
+          console.log(`No works found for ${templateData.openalexId} (this is normal for some researchers)`);
+          // Continue with empty publications array
+        }
+
+      } catch (apiError) {
+        console.error(`Error fetching OpenAlex data for ${templateData.openalexId}:`, apiError);
+        // Return template data with error info if API fails
+        return res.status(206).json({
+          profile,
+          researcher: null,
+          topics: [],
+          publications: [],
+          affiliations: [],
+          lastSynced: null,
+          apiError: "Failed to fetch live OpenAlex data. Profile data from template only."
+        });
+      }
+
+      // Return assembled data in same format as existing endpoint
+      res.json({
+        profile,
+        researcher,
+        topics,
+        publications,
+        affiliations,
+        lastSynced: new Date().toISOString() // Live data timestamp
+      });
+
+    } catch (error) {
+      console.error(`Error previewing template ${req.params.slug}:`, error);
+      
+      // Handle validation errors specifically
+      if (error instanceof Error && error.message.includes('Validation failed')) {
+        return res.status(400).json({ 
+          message: "Template validation failed", 
+          error: error.message 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to preview template" });
+    }
+  });
+
+  // Export researcher profile from JSON template as static HTML
+  app.get('/api/export/:slug', async (req, res) => {
+    try {
+      const { slug } = req.params;
+      
+      // Validate slug to prevent directory traversal attacks
+      if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+        return res.status(400).json({ message: "Invalid template slug. Only alphanumeric characters, hyphens, and underscores are allowed." });
+      }
+      
+      // Load template data from JSON file
+      const template = await getTemplate(slug);
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      
+      const templateData = template.data;
+      
+      // Convert template data to profile format  
+      const profile = {
+        displayName: templateData.name,
+        title: templateData.title || null,
+        bio: templateData.bio || null,
+        currentAffiliation: templateData.currentAffiliation || null,
+        openalexId: templateData.openalexId,
+        isPublic: templateData.isPublic !== false,
+        links: templateData.links || null,
+        theme: templateData.theme || null,
+        lastSyncedAt: null,
+      };
+
+      // Fetch live data from OpenAlex API (same logic as preview)
+      let researcher = null;
+      let topics: any[] = [];
+      let publications: any[] = [];
+      let affiliations: any[] = [];
+
+      try {
+        const researcherData = await openalexService.getResearcher(templateData.openalexId);
+        researcher = researcherData;
+
+        if (researcherData.topics && researcherData.topics.length > 0) {
+          topics = researcherData.topics.map((topic: any) => ({
+            openalexId: templateData.openalexId,
+            topicId: topic.id,
+            displayName: topic.display_name,
+            count: topic.count,
+            subfield: topic.subfield.display_name,
+            field: topic.field.display_name,
+            domain: topic.domain.display_name,
+          }));
+        }
+
+        if (researcherData.affiliations && researcherData.affiliations.length > 0) {
+          affiliations = researcherData.affiliations.map((affiliation: any) => {
+            const sortedYears = affiliation.years.sort((a: number, b: number) => a - b);
+            return {
+              openalexId: templateData.openalexId,
+              institutionId: affiliation.institution.id,
+              institutionName: affiliation.institution.display_name,
+              institutionType: affiliation.institution.type,
+              countryCode: affiliation.institution.country_code,
+              years: affiliation.years,
+              startYear: sortedYears[0],
+              endYear: sortedYears[sortedYears.length - 1],
+            };
+          });
+        }
+
+        try {
+          const worksResponse = await openalexService.getResearcherWorks(templateData.openalexId);
+          if (worksResponse.results && worksResponse.results.length > 0) {
+            publications = worksResponse.results.map((work: any) => ({
+              openalexId: templateData.openalexId,
+              workId: work.id,
+              title: work.title,
+              authorNames: work.authorships.map((a: any) => a.author.display_name).join(', '),
+              journal: work.primary_location?.source?.display_name || null,
+              publicationYear: work.publication_year || null,
+              citationCount: work.cited_by_count || 0,
+              topics: work.topics ? work.topics.map((t: any) => t.display_name) : null,
+              doi: work.doi || null,
+              isOpenAccess: work.open_access?.is_oa || false,
+            }));
+          }
+        } catch (worksError) {
+          console.log(`No works found for ${templateData.openalexId} during export`);
+        }
+
+      } catch (apiError) {
+        console.error(`Error fetching OpenAlex data for export ${templateData.openalexId}:`, apiError);
+        // Continue with template data only if API fails
+      }
+
+      // Prepare export data
+      const exportData = {
+        profile,
+        researcher,
+        topics,
+        publications,
+        affiliations,
+        lastSynced: new Date().toISOString(),
+        exportedAt: new Date().toISOString(),
+        exportUrl: `${req.protocol}://${req.get('host')}/preview/${slug}`
+      };
+
+      // Generate static HTML using existing function
+      const staticHTML = generateStaticHTML(exportData);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="${(templateData.name || slug).replace(/[^a-zA-Z0-9_-]/g, '_')}-profile.html"`);
+      res.send(staticHTML);
+
+    } catch (error) {
+      console.error(`Error exporting template ${req.params.slug}:`, error);
+      
+      if (error instanceof Error && error.message.includes('Validation failed')) {
+        return res.status(400).json({ 
+          message: "Template validation failed", 
+          error: error.message 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to export template" });
     }
   });
 

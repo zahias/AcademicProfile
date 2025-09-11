@@ -1,0 +1,25 @@
+{
+  "name": "Dr. Alex Morgan",
+  "title": "Senior Data Scientist",
+  "bio": "Dr. Alex Morgan is a data scientist specializing in machine learning applications for healthcare. With expertise in predictive modeling and statistical analysis, Alex has contributed to breakthrough research in medical diagnosis and treatment optimization.",
+  "currentAffiliation": "MIT",
+  "currentPosition": "Senior Research Scientist",
+  "currentAffiliationUrl": "https://www.mit.edu",
+  "currentAffiliationStartDate": "2020-01-15",
+  "openalexId": "A5076797200",
+  "links": {
+    "website": "https://alexmorgan.dev",
+    "google_scholar": "https://scholar.google.com/citations?user=testuser",
+    "orcid": "0000-0000-0000-0001",
+    "twitter": "alexmorganai",
+    "linkedin": "https://linkedin.com/in/alexmorgan-data",
+    "github": "alexmorgan-ds"
+  },
+  "theme": {
+    "primaryColor": "#0ea5e9",
+    "secondaryColor": "#475569", 
+    "fontFamily": "roboto",
+    "layout": "minimal"
+  },
+  "isPublic": true
+}
