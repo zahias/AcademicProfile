@@ -49,7 +49,11 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
         title: "Success",
         description: "Research data synced successfully",
       });
+      // Invalidate all related researcher data caches
       queryClient.invalidateQueries({ queryKey: ["/api/researcher"] });
+      if (profile?.openalexId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/researcher/${profile.openalexId}/data`] });
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -84,7 +88,11 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
         title: "Success",
         description: "Profile updated successfully",
       });
+      // Invalidate all related researcher data caches
       queryClient.invalidateQueries({ queryKey: ["/api/researcher"] });
+      if (profile?.openalexId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/researcher/${profile.openalexId}/data`] });
+      }
       onClose();
     },
     onError: (error) => {

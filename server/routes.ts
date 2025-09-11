@@ -109,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get cached OpenAlex data
       const researcherData = await storage.getOpenalexData(openalexId, 'researcher');
       const researchTopics = await storage.getResearchTopics(openalexId);
-      const publications = await storage.getPublications(openalexId, 10);
+      const publications = await storage.getPublications(openalexId); // Get ALL publications for accurate analytics
       const affiliations = await storage.getAffiliations(openalexId);
 
       res.json({
