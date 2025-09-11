@@ -9,7 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import { Upload } from "lucide-react";
 import type { ResearcherProfile } from "@shared/schema";
+import type { UploadResult } from "@uppy/core";
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -31,8 +34,8 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     isPublic: profile?.isPublic ?? true,
   });
 
-  const [cvFile, setCvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadedCvUrl, setUploadedCvUrl] = useState<string | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -104,25 +107,67 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     },
   });
 
-  const handleCvUpload = async (file: File): Promise<string> => {
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-      const response = await fetch('/api/upload/cv', {
-        method: 'POST',
-        body: formData,
-      });
+  const handleCvUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadedFile = result.successful[0];
       
-      if (!response.ok) {
-        throw new Error('Failed to upload CV');
+      // The upload URL used for the upload can be derived from uppy's response
+      const uploadUrl = (uploadedFile as any).uploadURL || (uploadedFile.response as any)?.url;
+      
+      if (uploadUrl) {
+        // Complete the upload process by calling our backend
+        apiRequest("PUT", "/api/upload/cv/complete", { uploadURL: uploadUrl })
+          .then((response: any) => {
+            const objectPath = response.objectPath || uploadUrl;
+            setUploadedCvUrl(objectPath);
+            toast({
+              title: "Success",
+              description: "CV uploaded successfully",
+            });
+          })
+          .catch((error) => {
+            console.error("Error completing CV upload:", error);
+            // If completion fails, still use the upload URL as backup
+            setUploadedCvUrl(uploadUrl);
+            toast({
+              title: "Warning", 
+              description: "CV uploaded but metadata may be incomplete",
+              variant: "destructive",
+            });
+          });
+      } else {
+        toast({
+          title: "Error", 
+          description: "Upload completed but URL not found",
+          variant: "destructive",
+        });
       }
-      
-      const result = await response.json();
-      return result.url;
-    } finally {
-      setIsUploading(false);
+    } else {
+      toast({
+        title: "Error",
+        description: "Upload failed",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getCvUploadParams = async () => {
+    try {
+      const response = await apiRequest("POST", "/api/upload/cv/url", {
+        filename: "cv.pdf"
+      }) as unknown as { uploadURL: string };
+      return {
+        method: "PUT" as const,
+        url: response.uploadURL,
+      };
+    } catch (error) {
+      console.error("Error getting CV upload URL:", error);
+      toast({
+        title: "Error",
+        description: "Failed to get upload URL. Please check your connection.",
+        variant: "destructive",
+      });
+      throw error;
     }
   };
 
@@ -131,19 +176,9 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     
     let finalFormData = { ...formData };
     
-    // Upload CV if a new file is selected
-    if (cvFile) {
-      try {
-        const cvUrl = await handleCvUpload(cvFile);
-        finalFormData.cvUrl = cvUrl;
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to upload CV",
-          variant: "destructive",
-        });
-        return;
-      }
+    // Use uploaded CV URL if available
+    if (uploadedCvUrl) {
+      finalFormData.cvUrl = uploadedCvUrl;
     }
     
     profileMutation.mutate(finalFormData);
@@ -227,14 +262,14 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
                 <h3 className="font-medium text-lg">CV & Documents</h3>
                 
                 <div>
-                  <Label htmlFor="cv-upload">Upload CV (PDF)</Label>
+                  <Label>Upload CV (PDF)</Label>
                   <div className="mt-2">
-                    {formData.cvUrl && !cvFile && (
+                    {(formData.cvUrl || uploadedCvUrl) && (
                       <div className="flex items-center gap-2 mb-2 p-2 bg-muted rounded">
                         <i className="fas fa-file-pdf text-red-600"></i>
                         <span className="text-sm">Current CV uploaded</span>
                         <a 
-                          href={formData.cvUrl} 
+                          href={uploadedCvUrl || formData.cvUrl} 
                           target="_blank" 
                           className="text-primary hover:underline text-sm"
                         >
@@ -242,14 +277,16 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
                         </a>
                       </div>
                     )}
-                    <Input
-                      id="cv-upload"
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => setCvFile(e.target.files?.[0] || null)}
-                      className="cursor-pointer"
-                      data-testid="input-cv-upload"
-                    />
+                    <ObjectUploader
+                      maxNumberOfFiles={1}
+                      maxFileSize={10 * 1024 * 1024} // 10MB
+                      onGetUploadParameters={getCvUploadParams}
+                      onComplete={handleCvUploadComplete}
+                      buttonClassName="w-full"
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload CV (PDF)
+                    </ObjectUploader>
                     <p className="text-xs text-muted-foreground mt-1">
                       Upload a PDF file of your CV (max 10MB)
                     </p>
