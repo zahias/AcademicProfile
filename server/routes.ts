@@ -6,6 +6,7 @@ import { OpenAlexService } from "./services/openalexApi";
 import { insertResearcherProfileSchema, updateResearcherProfileSchema } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { listTemplates, getTemplate, getTemplateModTime } from "./fileData";
 import { z } from "zod";
 
 // Security utility functions for safe HTML generation
@@ -437,6 +438,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching OpenAlex:", error);
       res.status(500).json({ message: "Failed to search OpenAlex" });
+    }
+  });
+
+  // Template routes (no authentication required)
+  
+  // Get all available templates
+  app.get('/api/templates', async (req, res) => {
+    try {
+      const templates = await listTemplates();
+      res.json({
+        templates: templates.map(template => ({
+          slug: template.slug,
+          filename: template.filename,
+          lastModified: template.lastModified.toISOString(),
+        })),
+        count: templates.length
+      });
+    } catch (error) {
+      console.error("Error listing templates:", error);
+      res.status(500).json({ message: "Failed to list templates" });
+    }
+  });
+
+  // Get specific template by slug
+  app.get('/api/templates/:slug', async (req, res) => {
+    try {
+      const { slug } = req.params;
+      
+      // Validate slug to prevent directory traversal attacks
+      if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
+        return res.status(400).json({ message: "Invalid template slug. Only alphanumeric characters, hyphens, and underscores are allowed." });
+      }
+      
+      const template = await getTemplate(slug);
+      
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      
+      res.json({
+        slug,
+        data: template.data,
+        lastModified: template.lastModified.toISOString(),
+      });
+    } catch (error) {
+      console.error(`Error fetching template ${req.params.slug}:`, error);
+      
+      // Handle validation errors specifically
+      if (error instanceof Error && error.message.includes('Validation failed')) {
+        return res.status(400).json({ 
+          message: "Template validation failed", 
+          error: error.message 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to fetch template" });
     }
   });
 

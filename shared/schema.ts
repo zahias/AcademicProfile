@@ -147,3 +147,41 @@ export const insertResearcherProfileSchema = createInsertSchema(researcherProfil
 export const updateResearcherProfileSchema = insertResearcherProfileSchema.partial().extend({
   id: z.string(),
 });
+
+// Schema for file-driven template validation (separate from database schemas)
+export const researcherInputSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  title: z.string().optional(),
+  bio: z.string().optional(),
+  currentAffiliation: z.string().optional(),
+  currentPosition: z.string().optional(),
+  currentAffiliationUrl: z.string().url().optional().or(z.literal("")),
+  currentAffiliationStartDate: z.string().optional(),
+  openalexId: z.string().transform((val) => {
+    // Ensure OpenAlex ID is properly formatted with capital A
+    const trimmed = val.trim();
+    if (trimmed.toLowerCase().startsWith('a') && !trimmed.startsWith('A')) {
+      return 'A' + trimmed.slice(1);
+    }
+    return trimmed.startsWith('A') ? trimmed : `A${trimmed}`;
+  }).refine((val) => /^A\d+$/.test(val), {
+    message: "OpenAlex ID must start with 'A' followed by numbers (e.g., A5056485484)"
+  }),
+  links: z.object({
+    website: z.string().url().optional().or(z.literal("")),
+    google_scholar: z.string().url().optional().or(z.literal("")),
+    orcid: z.string().optional(),
+    twitter: z.string().optional(),
+    linkedin: z.string().url().optional().or(z.literal("")),
+    github: z.string().optional(),
+  }).optional(),
+  theme: z.object({
+    primaryColor: z.string().optional(),
+    secondaryColor: z.string().optional(),
+    fontFamily: z.enum(['inter', 'roboto', 'playfair', 'source-serif']).optional(),
+    layout: z.enum(['classic', 'modern', 'minimal']).optional(),
+  }).optional(),
+  isPublic: z.boolean().default(true),
+});
+
+export type ResearcherInput = z.infer<typeof researcherInputSchema>;

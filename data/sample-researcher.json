@@ -1,0 +1,25 @@
+{
+  "name": "Dr. Sarah Chen",
+  "title": "Professor of Computer Science",
+  "bio": "Dr. Sarah Chen is a leading researcher in artificial intelligence and machine learning with over 15 years of experience. Her work focuses on natural language processing, computer vision, and ethical AI systems. She has published over 100 peer-reviewed papers and serves on the editorial boards of several top-tier journals.",
+  "currentAffiliation": "Stanford University",
+  "currentPosition": "Professor",
+  "currentAffiliationUrl": "https://www.stanford.edu",
+  "currentAffiliationStartDate": "2018-09-01",
+  "openalexId": "A5023888391",
+  "links": {
+    "website": "https://sarahchen.ai",
+    "google_scholar": "https://scholar.google.com/citations?user=example",
+    "orcid": "0000-0000-0000-0000",
+    "twitter": "drsarahchen",
+    "linkedin": "https://linkedin.com/in/sarahchen",
+    "github": "sarahchen"
+  },
+  "theme": {
+    "primaryColor": "#1e40af",
+    "secondaryColor": "#64748b", 
+    "fontFamily": "inter",
+    "layout": "modern"
+  },
+  "isPublic": true
+}
