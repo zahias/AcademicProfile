@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import Navigation from "./Navigation";
 import AdminDashboard from "./AdminDashboard";
 import StatsOverview from "./StatsOverview";
+import PublicationAnalytics from "./PublicationAnalytics";
 import ResearchTopics from "./ResearchTopics";
 import Publications from "./Publications";
 import { Card, CardContent } from "@/components/ui/card";
@@ -162,6 +163,7 @@ export default function ResearcherProfile() {
       </section>
 
       <StatsOverview openalexId={profile?.openalexId || ''} />
+      <PublicationAnalytics openalexId={profile?.openalexId || ''} />
       <ResearchTopics openalexId={profile?.openalexId || ''} />
       <Publications openalexId={profile?.openalexId || ''} />
 
