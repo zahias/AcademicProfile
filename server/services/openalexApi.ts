@@ -131,8 +131,17 @@ export class OpenAlexService {
     try {
       console.log(`Starting sync for researcher: ${openalexId}`);
       
-      // Fetch researcher data
-      const researcher = await this.getResearcher(openalexId);
+      // Fetch researcher data - handle 404 gracefully
+      let researcher;
+      try {
+        researcher = await this.getResearcher(openalexId);
+      } catch (error) {
+        if (error.message.includes('404')) {
+          console.log(`OpenAlex researcher ${openalexId} not found (404) - skipping sync`);
+          return; // Exit gracefully, don't fail profile creation
+        }
+        throw error; // Re-throw other errors
+      }
       
       // Cache raw researcher data
       await storage.upsertOpenalexData({
@@ -175,8 +184,17 @@ export class OpenAlexService {
         await storage.upsertAffiliations(affiliations);
       }
 
-      // Fetch and process works/publications
-      const worksResponse = await this.getResearcherWorks(openalexId);
+      // Fetch and process works/publications - handle 404 gracefully
+      let worksResponse;
+      try {
+        worksResponse = await this.getResearcherWorks(openalexId);
+      } catch (error) {
+        if (error.message.includes('404')) {
+          console.log(`OpenAlex works for ${openalexId} not found (404) - skipping works sync`);
+          return;
+        }
+        throw error;
+      }
       
       if (worksResponse.results && worksResponse.results.length > 0) {
         const publications: InsertPublication[] = worksResponse.results.map(work => ({

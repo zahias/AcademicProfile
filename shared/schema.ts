@@ -121,6 +121,17 @@ export const insertResearcherProfileSchema = createInsertSchema(researcherProfil
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  openalexId: z.string().transform((val) => {
+    // Ensure OpenAlex ID is properly formatted with capital A
+    const trimmed = val.trim();
+    if (trimmed.toLowerCase().startsWith('a') && !trimmed.startsWith('A')) {
+      return 'A' + trimmed.slice(1);
+    }
+    return trimmed.startsWith('A') ? trimmed : `A${trimmed}`;
+  }).refine((val) => /^A\d+$/.test(val), {
+    message: "OpenAlex ID must start with 'A' followed by numbers (e.g., A5056485484)"
+  })
 });
 
 export const updateResearcherProfileSchema = insertResearcherProfileSchema.partial().extend({

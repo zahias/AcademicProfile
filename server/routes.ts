@@ -46,9 +46,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const profile = await storage.upsertResearcherProfile(profileData);
       
-      // Trigger initial data sync from OpenAlex
+      // Trigger initial data sync from OpenAlex (non-blocking)
       if (profile.openalexId) {
-        await openalexService.syncResearcherData(profile.openalexId);
+        openalexService.syncResearcherData(profile.openalexId).catch(error => {
+          console.error(`Failed to sync OpenAlex data for ${profile.openalexId}:`, error);
+          // Don't fail the profile creation - sync can be attempted later
+        });
       }
       
       res.json(profile);
