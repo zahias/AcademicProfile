@@ -8,6 +8,256 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { z } from "zod";
 
+// Security utility functions for safe HTML generation
+
+// Test function to verify XSS protection
+function testXSSProtection() {
+  const maliciousInputs = [
+    '<script>alert("XSS")</script>',
+    '"><script>alert("XSS")</script>',
+    'javascript:alert("XSS")',
+    '<img src=x onerror=alert("XSS")>',
+    '<svg onload=alert("XSS")>',
+    '&lt;script&gt;alert("XSS")&lt;/script&gt;'
+  ];
+
+  console.log('🔒 Testing XSS Protection...');
+  
+  maliciousInputs.forEach((input, index) => {
+    const escaped = escapeHtml(input);
+    const attributeEscaped = escapeHtmlAttribute(input);
+    const urlSanitized = validateAndSanitizeUrl(input);
+    
+    console.log(`Test ${index + 1}:`);
+    console.log(`  Input: ${input}`);
+    console.log(`  HTML Escaped: ${escaped}`);
+    console.log(`  Attribute Escaped: ${attributeEscaped}`);
+    console.log(`  URL Sanitized: ${urlSanitized}`);
+    console.log('  ---');
+  });
+
+  // Test that valid URLs still work
+  const validUrls = ['https://example.com', '/path/to/page', '#anchor'];
+  console.log('Valid URL tests:');
+  validUrls.forEach(url => {
+    console.log(`  ${url} -> ${validateAndSanitizeUrl(url)}`);
+  });
+  
+  console.log('✅ XSS Protection tests completed');
+}
+function escapeHtml(unsafe: string | undefined | null): string {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeHtmlAttribute(unsafe: string | undefined | null): string {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\n/g, ' ')
+    .replace(/\r/g, ' ')
+    .replace(/\t/g, ' ');
+}
+
+function validateAndSanitizeUrl(url: string | undefined | null): string {
+  if (!url) return '#';
+  
+  // Remove any potentially dangerous characters
+  const sanitized = String(url).replace(/[<>"']/g, '');
+  
+  // Only allow http, https, and relative URLs
+  try {
+    const urlObj = new URL(sanitized, 'https://example.com');
+    if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+      return sanitized;
+    }
+  } catch {
+    // If URL parsing fails, check if it's a relative URL
+    if (sanitized.startsWith('/') || sanitized.startsWith('#')) {
+      return sanitized;
+    }
+  }
+  
+  // Default to safe fallback
+  return '#';
+}
+
+// Static HTML template for exported researcher profiles
+function generateStaticHTML(data: any): string {
+  const { profile, researcher, topics, publications, affiliations, exportedAt, exportUrl } = data;
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtmlAttribute(profile.displayName) || 'Researcher Profile'} - Academic Profile</title>
+    <meta name="description" content="${escapeHtmlAttribute(profile.bio) || `Academic profile of ${escapeHtmlAttribute(profile.displayName) || 'researcher'} with publications, research topics, and career information.`}">
+    <meta name="author" content="${escapeHtmlAttribute(profile.displayName) || 'Researcher'}">
+    
+    <!-- Open Graph meta tags -->
+    <meta property="og:title" content="${escapeHtmlAttribute(profile.displayName) || 'Researcher Profile'} - Academic Profile">
+    <meta property="og:description" content="${escapeHtmlAttribute(profile.bio) || `Academic profile with ${publications?.length || 0} publications and ${researcher?.cited_by_count || 0} citations.`}">
+    <meta property="og:type" content="profile">
+    <meta property="og:url" content="${validateAndSanitizeUrl(exportUrl)}">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .stats-card { backdrop-filter: blur(10px); background: rgba(255,255,255,0.1); }
+        .publication-card { transition: all 0.3s ease; }
+        .publication-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+    <!-- Header -->
+    <header class="gradient-bg text-white py-20">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center">
+                <div class="w-32 h-32 bg-white/20 rounded-full mx-auto mb-6 flex items-center justify-center backdrop-blur-sm">
+                    <span class="text-4xl font-bold text-white">${escapeHtml((profile.displayName || 'R').charAt(0))}</span>
+                </div>
+                <h1 class="text-5xl font-bold mb-4">${escapeHtml(profile.displayName) || 'Researcher Profile'}</h1>
+                ${profile.title ? `<p class="text-xl mb-4 text-white/90">${escapeHtml(profile.title)}</p>` : ''}
+                ${profile.currentAffiliation ? `<p class="text-lg text-white/80">${escapeHtml(profile.currentAffiliation)}</p>` : ''}
+                ${profile.bio ? `<p class="mt-6 text-white/90 max-w-3xl mx-auto leading-relaxed">${escapeHtml(profile.bio)}</p>` : ''}
+            </div>
+        </div>
+    </header>
+
+    <!-- Stats Overview -->
+    <section class="py-16 -mt-10 relative z-10">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="stats-card rounded-lg p-6 text-center text-white border border-white/20">
+                    <div class="text-3xl font-bold">${publications?.length || 0}</div>
+                    <div class="text-sm opacity-80">Publications</div>
+                </div>
+                <div class="stats-card rounded-lg p-6 text-center text-white border border-white/20">
+                    <div class="text-3xl font-bold">${researcher?.cited_by_count || 0}</div>
+                    <div class="text-sm opacity-80">Citations</div>
+                </div>
+                <div class="stats-card rounded-lg p-6 text-center text-white border border-white/20">
+                    <div class="text-3xl font-bold">${researcher?.summary_stats?.h_index || 0}</div>
+                    <div class="text-sm opacity-80">h-index</div>
+                </div>
+                <div class="stats-card rounded-lg p-6 text-center text-white border border-white/20">
+                    <div class="text-3xl font-bold">${researcher?.summary_stats?.i10_index || 0}</div>
+                    <div class="text-sm opacity-80">i10-index</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Research Topics -->
+    ${topics && topics.length > 0 ? `
+    <section class="py-16 bg-white">
+        <div class="max-w-6xl mx-auto px-6">
+            <h2 class="text-3xl font-bold mb-8 text-center">Research Areas</h2>
+            <div class="flex flex-wrap gap-3 justify-center">
+                ${topics.slice(0, 15).map(topic => `
+                    <span class="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                        ${escapeHtml(topic.displayName)} (${escapeHtml(String(topic.count))})
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    </section>
+    ` : ''}
+
+    <!-- Publications -->
+    ${publications && publications.length > 0 ? `
+    <section class="py-16 bg-gray-50">
+        <div class="max-w-6xl mx-auto px-6">
+            <h2 class="text-3xl font-bold mb-8 text-center">Recent Publications</h2>
+            <div class="space-y-6">
+                ${publications.slice(0, 10).map(pub => `
+                    <div class="publication-card bg-white rounded-lg p-6 shadow-sm border">
+                        <h3 class="text-xl font-semibold mb-2 text-gray-900">${escapeHtml(pub.title)}</h3>
+                        ${pub.authorNames ? `<p class="text-gray-600 mb-2">${escapeHtml(pub.authorNames)}</p>` : ''}
+                        <div class="flex flex-wrap gap-4 text-sm text-gray-500">
+                            ${pub.journal ? `<span>📖 ${escapeHtml(pub.journal)}</span>` : ''}
+                            ${pub.publicationYear ? `<span>📅 ${escapeHtml(String(pub.publicationYear))}</span>` : ''}
+                            ${pub.citationCount ? `<span>📊 ${escapeHtml(String(pub.citationCount))} citations</span>` : ''}
+                            ${pub.isOpenAccess ? '<span class="text-green-600">🔓 Open Access</span>' : ''}
+                        </div>
+                        ${pub.doi ? `<p class="mt-2 text-xs text-gray-400">DOI: ${escapeHtml(pub.doi)}</p>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    </section>
+    ` : ''}
+
+    <!-- Affiliations -->
+    ${affiliations && affiliations.length > 0 ? `
+    <section class="py-16 bg-white">
+        <div class="max-w-6xl mx-auto px-6">
+            <h2 class="text-3xl font-bold mb-8 text-center">Institutional Affiliations</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                ${affiliations.map(aff => `
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <h3 class="font-semibold text-lg mb-2">${escapeHtml(aff.institutionName)}</h3>
+                        ${aff.institutionType ? `<p class="text-gray-600 mb-2">${escapeHtml(aff.institutionType)}</p>` : ''}
+                        ${aff.countryCode ? `<p class="text-sm text-gray-500">📍 ${escapeHtml(aff.countryCode)}</p>` : ''}
+                        ${aff.startYear || aff.endYear ? `
+                            <p class="text-sm text-gray-500 mt-2">
+                                ${escapeHtml(String(aff.startYear || '?'))} - ${escapeHtml(String(aff.endYear || 'Present'))}
+                            </p>
+                        ` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    </section>
+    ` : ''}
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-6xl mx-auto px-6 text-center">
+            <p class="text-gray-400 mb-4">
+                This profile was generated from OpenAlex data on ${escapeHtml(new Date(exportedAt).toLocaleDateString())}.
+            </p>
+            <p class="text-gray-500 text-sm">
+                Data sourced from <a href="https://openalex.org" class="text-blue-400 hover:underline">OpenAlex</a> • 
+                Generated by Research Profile Platform
+            </p>
+            <div class="mt-6 no-print">
+                <a href="${validateAndSanitizeUrl(exportUrl)}" class="text-blue-400 hover:underline">View Live Profile</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Smooth scroll for any anchor links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>`;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -95,6 +345,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all public researcher profiles for directory
+  app.get('/api/researchers/public', async (req, res) => {
+    try {
+      const profiles = await storage.getAllPublicResearcherProfiles();
+      
+      // Get basic stats for each researcher
+      const profilesWithStats = await Promise.all(
+        profiles.map(async (profile) => {
+          const researcherData = await storage.getOpenalexData(profile.openalexId, 'researcher');
+          return {
+            ...profile,
+            stats: researcherData?.data ? {
+              worksCount: researcherData.data.works_count || 0,
+              citedByCount: researcherData.data.cited_by_count || 0,
+              hIndex: researcherData.data.summary_stats?.h_index || 0,
+              i10Index: researcherData.data.summary_stats?.i10_index || 0,
+            } : null
+          };
+        })
+      );
+      
+      res.json(profilesWithStats);
+    } catch (error) {
+      console.error("Error fetching public researcher profiles:", error);
+      res.status(500).json({ message: "Failed to fetch researcher profiles" });
+    }
+  });
+
   // Public researcher data routes
   app.get('/api/researcher/:openalexId/data', async (req, res) => {
     try {
@@ -159,6 +437,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching OpenAlex:", error);
       res.status(500).json({ message: "Failed to search OpenAlex" });
+    }
+  });
+
+  // Export researcher website as static HTML
+  app.get('/api/researcher/:openalexId/export', isAuthenticated, async (req: any, res) => {
+    try {
+      const { openalexId } = req.params;
+      const userId = req.user.claims.sub;
+      
+      // Verify ownership - user can only export their own profile
+      const profile = await storage.getResearcherProfile(userId);
+      if (!profile || profile.openalexId !== openalexId) {
+        return res.status(403).json({ message: "Unauthorized - you can only export your own profile" });
+      }
+
+      // Get all researcher data
+      const researcherData = await storage.getOpenalexData(openalexId, 'researcher');
+      const researchTopics = await storage.getResearchTopics(openalexId);
+      const publications = await storage.getPublications(openalexId);
+      const affiliations = await storage.getAffiliations(openalexId);
+
+      const exportData = {
+        profile,
+        researcher: researcherData?.data || null,
+        topics: researchTopics,
+        publications,
+        affiliations,
+        lastSynced: profile.lastSyncedAt,
+        exportedAt: new Date().toISOString(),
+        exportUrl: `${req.protocol}://${req.get('host')}/researcher/${openalexId}`
+      };
+
+      // Generate static HTML
+      const staticHTML = generateStaticHTML(exportData);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="${profile.displayName || 'researcher'}-profile.html"`);
+      res.send(staticHTML);
+    } catch (error) {
+      console.error("Error exporting researcher profile:", error);
+      res.status(500).json({ message: "Failed to export researcher profile" });
     }
   });
 

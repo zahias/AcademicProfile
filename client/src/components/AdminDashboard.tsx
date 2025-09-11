@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { Upload } from "lucide-react";
+import { Upload, Search, CheckCircle, ExternalLink } from "lucide-react";
 import type { ResearcherProfile } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
 
@@ -36,9 +37,44 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedCvUrl, setUploadedCvUrl] = useState<string | null>(null);
+  const [searchingOpenAlex, setSearchingOpenAlex] = useState(false);
+  const [openalexPreview, setOpenalexPreview] = useState<any>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Function to search OpenAlex by ID and preview data
+  const searchOpenAlex = async (openalexId: string) => {
+    if (!openalexId.trim()) {
+      setOpenalexPreview(null);
+      return;
+    }
+
+    setSearchingOpenAlex(true);
+    try {
+      const data = await apiRequest("GET", `/api/openalex/search/${openalexId.trim()}`);
+      setOpenalexPreview(data);
+      
+      // Auto-fill form fields with OpenAlex data
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          displayName: data.display_name || prev.displayName,
+          // Don't overwrite other fields if they already have values
+        }));
+      }
+    } catch (error) {
+      console.error("Error searching OpenAlex:", error);
+      setOpenalexPreview(null);
+      toast({
+        title: "Search Error",
+        description: "Could not find researcher with that OpenAlex ID",
+        variant: "destructive",
+      });
+    } finally {
+      setSearchingOpenAlex(false);
+    }
+  };
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -187,6 +223,11 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     // Use uploaded CV URL if available
     if (uploadedCvUrl) {
       finalFormData.cvUrl = uploadedCvUrl;
+    }
+    
+    // Convert empty strings to null for date fields to prevent database errors
+    if (finalFormData.currentAffiliationStartDate === '') {
+      finalFormData.currentAffiliationStartDate = null;
     }
     
     profileMutation.mutate(finalFormData);
@@ -414,6 +455,28 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
                         Sync Now
                       </>
                     )}
+                  </Button>
+                </div>
+                
+                {/* Export Section */}
+                <div className="bg-primary/5 rounded-lg p-4 mt-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4" />
+                    Export Profile
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Download a standalone HTML website of your research profile that you can host anywhere.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      window.open(`/api/researcher/${profile.openalexId}/export`, '_blank');
+                    }}
+                    variant="outline" 
+                    className="w-full"
+                    data-testid="button-export-profile"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Download Static Website
                   </Button>
                 </div>
               </div>

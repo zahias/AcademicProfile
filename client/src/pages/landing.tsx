@@ -1,18 +1,30 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+
+interface ResearcherProfile {
+  id: string;
+  openalexId: string;
+  displayName: string;
+  title?: string;
+  bio?: string;
+  currentAffiliation?: string;
+  currentPosition?: string;
+  stats?: {
+    worksCount: number;
+    citedByCount: number;
+    hIndex: number;
+    i10Index: number;
+  } | null;
+}
 
 export default function Landing() {
-  // Fetch public researcher data for Zahi Abdul Sater as demo
-  const { data: researcherData, isLoading } = useQuery<{
-    profile: any;
-    researcher: any;
-    topics: any[];
-    publications: any[];
-    affiliations: any[];
-    lastSynced: string;
-  } | null>({
-    queryKey: ["/api/researcher/A5056485484/data"],
+  // Fetch all public researcher profiles
+  const { data: researchers, isLoading } = useQuery<ResearcherProfile[]>({
+    queryKey: ["/api/researchers/public"],
     retry: false,
   });
 
@@ -61,10 +73,10 @@ export default function Landing() {
             <Button 
               size="lg" 
               variant="outline"
-              onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
-              data-testid="button-view-demo"
+              onClick={() => document.getElementById('researchers')?.scrollIntoView({ behavior: 'smooth' })}
+              data-testid="button-browse-researchers"
             >
-              View Demo
+              Browse Researchers
             </Button>
           </div>
         </div>
@@ -126,77 +138,123 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Demo Section */}
-      {!isLoading && researcherData && (
-        <section id="demo" className="py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">Live Demo</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                See how your research profile could look with real data from OpenAlex
-              </p>
+      {/* Researcher Directory Section */}
+      <section id="researchers" className="py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Featured Researchers</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Discover researcher profiles and their academic contributions
+            </p>
+          </div>
+          
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="h-64">
+                  <CardContent className="pt-6">
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      <Skeleton className="w-16 h-16 rounded-full" />
+                      <div className="space-y-2 w-full">
+                        <Skeleton className="h-4 w-3/4 mx-auto" />
+                        <Skeleton className="h-3 w-1/2 mx-auto" />
+                        <Skeleton className="h-3 w-2/3 mx-auto" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 w-full">
+                        <div className="text-center">
+                          <Skeleton className="h-6 w-8 mx-auto mb-1" />
+                          <Skeleton className="h-3 w-16 mx-auto" />
+                        </div>
+                        <div className="text-center">
+                          <Skeleton className="h-6 w-8 mx-auto mb-1" />
+                          <Skeleton className="h-3 w-12 mx-auto" />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            
-            <Card className="max-w-4xl mx-auto">
-              <CardContent className="pt-6">
-                <div className="text-center mb-8">
-                  <img 
-                    src="https://images.unsplash.com/photo-1582750433449-648ed127bb54?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&h=300" 
-                    alt="Researcher portrait" 
-                    className="w-20 h-20 rounded-full mx-auto mb-4 border-2 border-border"
-                  />
-                  <h3 className="text-2xl font-bold mb-2" data-testid="text-demo-name">
-                    {researcherData?.researcher?.display_name || 'Dr. Zahi Abdul Sater'}
-                  </h3>
-                  <p className="text-muted-foreground mb-4">
-                    {researcherData?.profile?.title || 'Senior Researcher in Health Sciences & Cancer Biology'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {researcherData?.affiliations?.[0]?.institutionName || 'American University of Beirut'}
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary" data-testid="text-demo-works">
-                      {researcherData?.researcher?.works_count || 54}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Publications</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-accent" data-testid="text-demo-citations">
-                      {researcherData?.researcher?.cited_by_count || 558}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Citations</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-primary" data-testid="text-demo-h-index">
-                      {researcherData?.researcher?.summary_stats?.h_index || 14}
-                    </div>
-                    <div className="text-sm text-muted-foreground">h-index</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-accent" data-testid="text-demo-i10-index">
-                      {researcherData?.researcher?.summary_stats?.i10_index || 17}
-                    </div>
-                    <div className="text-sm text-muted-foreground">i10-index</div>
-                  </div>
-                </div>
-                
-                <div className="text-center">
-                  <Button 
-                    onClick={() => window.location.href = '/api/login'}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    data-testid="button-create-profile"
-                  >
-                    Create Your Profile
-                  </Button>
-                </div>
+          ) : researchers && researchers.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {researchers.map((researcher) => (
+                <Link key={researcher.id} href={`/researcher/${researcher.openalexId}`}>
+                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer group">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center group-hover:scale-105 transition-transform">
+                          <span className="text-2xl font-bold text-primary">
+                            {researcher.displayName?.charAt(0) || '?'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <h3 className="font-semibold text-lg group-hover:text-primary transition-colors" data-testid={`text-researcher-name-${researcher.openalexId}`}>
+                            {researcher.displayName}
+                          </h3>
+                          {researcher.title && (
+                            <p className="text-sm text-muted-foreground" data-testid={`text-researcher-title-${researcher.openalexId}`}>
+                              {researcher.title}
+                            </p>
+                          )}
+                          {researcher.currentAffiliation && (
+                            <Badge variant="secondary" className="text-xs" data-testid={`text-researcher-affiliation-${researcher.openalexId}`}>
+                              {researcher.currentAffiliation}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        {researcher.stats && (
+                          <div className="grid grid-cols-2 gap-4 w-full text-sm">
+                            <div className="text-center">
+                              <div className="text-xl font-bold text-primary" data-testid={`text-researcher-works-${researcher.openalexId}`}>
+                                {researcher.stats.worksCount}
+                              </div>
+                              <div className="text-xs text-muted-foreground">Publications</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xl font-bold text-accent" data-testid={`text-researcher-citations-${researcher.openalexId}`}>
+                                {researcher.stats.citedByCount}
+                              </div>
+                              <div className="text-xs text-muted-foreground">Citations</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Card className="max-w-md mx-auto">
+              <CardContent className="pt-6 text-center">
+                <h3 className="text-lg font-semibold mb-2">No Researchers Yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Be the first researcher to join our platform!
+                </p>
+                <Button 
+                  onClick={() => window.location.href = '/api/login'}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  data-testid="button-be-first-researcher"
+                >
+                  Create Your Profile
+                </Button>
               </CardContent>
             </Card>
+          )}
+          
+          <div className="text-center mt-12">
+            <Button 
+              onClick={() => window.location.href = '/api/login'}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              data-testid="button-join-researchers"
+            >
+              Join Our Research Community
+            </Button>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-card border-t border-border py-12">

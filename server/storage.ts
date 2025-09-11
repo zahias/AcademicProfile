@@ -29,6 +29,7 @@ export interface IStorage {
   // Researcher profile operations
   getResearcherProfile(userId: string): Promise<ResearcherProfile | undefined>;
   getResearcherProfileByOpenalexId(openalexId: string): Promise<ResearcherProfile | undefined>;
+  getAllPublicResearcherProfiles(): Promise<ResearcherProfile[]>;
   upsertResearcherProfile(profile: InsertResearcherProfile): Promise<ResearcherProfile>;
   updateResearcherProfile(id: string, updates: Partial<ResearcherProfile>): Promise<ResearcherProfile>;
   
@@ -86,6 +87,14 @@ export class DatabaseStorage implements IStorage {
       .from(researcherProfiles)
       .where(eq(researcherProfiles.openalexId, openalexId));
     return profile;
+  }
+
+  async getAllPublicResearcherProfiles(): Promise<ResearcherProfile[]> {
+    return await db
+      .select()
+      .from(researcherProfiles)
+      .where(eq(researcherProfiles.isPublic, true))
+      .orderBy(desc(researcherProfiles.updatedAt));
   }
 
   async upsertResearcherProfile(profile: InsertResearcherProfile): Promise<ResearcherProfile> {

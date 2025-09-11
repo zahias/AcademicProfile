@@ -137,7 +137,11 @@ export const insertResearcherProfileSchema = createInsertSchema(researcherProfil
     return trimmed.startsWith('A') ? trimmed : `A${trimmed}`;
   }).refine((val) => /^A\d+$/.test(val), {
     message: "OpenAlex ID must start with 'A' followed by numbers (e.g., A5056485484)"
-  })
+  }),
+  currentAffiliationStartDate: z.string().transform((val) => {
+    // Transform empty strings to null for date fields to prevent DB errors
+    return val === '' ? null : val;
+  }).nullable()
 });
 
 export const updateResearcherProfileSchema = insertResearcherProfileSchema.partial().extend({
