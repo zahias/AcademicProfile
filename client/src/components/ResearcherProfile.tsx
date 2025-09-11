@@ -8,23 +8,12 @@ import Publications from "./Publications";
 import CareerTimeline from "./CareerTimeline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import type { ResearcherProfile } from "@shared/schema";
 
 export default function ResearcherProfile() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   
-  const { data: profile } = useQuery<{
-    id: string;
-    userId: string;
-    openalexId: string;
-    displayName: string | null;
-    title: string | null;
-    bio: string | null;
-    cvUrl: string | null;
-    isPublic: boolean;
-    lastSyncedAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-  } | null>({
+  const { data: profile } = useQuery<ResearcherProfile | null>({
     queryKey: ["/api/researcher/profile"],
     retry: false,
   });
