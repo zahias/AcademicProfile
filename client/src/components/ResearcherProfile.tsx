@@ -8,6 +8,7 @@ import ResearchTopics from "./ResearchTopics";
 import Publications from "./Publications";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Check, GraduationCap, TrendingUp } from "lucide-react";
 import type { ResearcherProfile } from "@shared/schema";
 
 export default function ResearcherProfile() {
@@ -37,7 +38,7 @@ export default function ResearcherProfile() {
                 <div className="bg-muted rounded-lg p-6 mb-8">
                   <h3 className="font-semibold mb-2">How to find your OpenAlex ID:</h3>
                   <ol className="text-sm text-muted-foreground text-left list-decimal list-inside space-y-1">
-                    <li>Visit <a href="https://openalex.org" target="_blank" className="text-primary hover:underline">OpenAlex.org</a></li>
+                    <li>Visit <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenAlex.org</a></li>
                     <li>Search for your name in the "Authors" section</li>
                     <li>Click on your profile to view your OpenAlex ID (starts with "A")</li>
                     <li>Copy the ID and paste it in the admin panel</li>
@@ -70,96 +71,120 @@ export default function ResearcherProfile() {
       <Navigation onAdminClick={() => setShowAdminModal(true)} />
       
       {/* Enhanced Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-primary/95 to-accent">
-        {/* Background pattern overlay */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.3) 1px, transparent 0)',
-            backgroundSize: '20px 20px'
-          }}></div>
-        </div>
+      <section className="hero-banner min-h-[85vh] flex items-center">
+        {/* Enhanced Background pattern overlay */}
+        <div className="hero-pattern"></div>
         
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 z-10">
+          <div className="lg:grid lg:grid-cols-12 lg:gap-12 items-center">
             {/* Profile Image Section */}
-            <div className="lg:col-span-4 flex justify-center lg:justify-start mb-8 lg:mb-0">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-white/20 rounded-full blur-xl"></div>
-                <div className="relative bg-white/10 backdrop-blur-sm rounded-full p-2">
+            <div className="lg:col-span-4 flex justify-center lg:justify-start mb-12 lg:mb-0">
+              <div className="profile-image-container">
+                <div className="profile-image-glow"></div>
+                <div className="relative bg-white/10 backdrop-blur-sm rounded-full p-3 shadow-2xl">
                   <img 
-                    src="https://images.unsplash.com/photo-1582750433449-648ed127bb54?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400" 
+                    src="https://images.unsplash.com/photo-1582750433449-648ed127bb54?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&h=500" 
                     alt="Professional portrait" 
-                    className="w-40 h-40 lg:w-48 lg:h-48 rounded-full object-cover border-4 border-white/30 shadow-2xl"
+                    className="w-44 h-44 lg:w-56 lg:h-56 rounded-full object-cover border-4 border-white/30 shadow-2xl"
                     data-testid="img-profile-photo"
                   />
-                  <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center">
-                    <i className="fas fa-check text-white text-xs"></i>
+                  <div className="profile-badge absolute -bottom-3 -right-3 w-10 h-10 rounded-full border-4 border-white flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
                   </div>
                 </div>
               </div>
             </div>
             
             {/* Content Section */}
-            <div className="lg:col-span-8 text-center lg:text-left text-white">
-              <div className="mb-6">
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-3 leading-tight" data-testid="text-display-name">
-                  {profile?.displayName || 'Researcher Profile'}
-                </h1>
-                <p className="text-xl sm:text-2xl mb-4 text-white/90 font-light" data-testid="text-title">
-                  {profile?.title || 'Research Professional'}
-                </p>
+            <div className="lg:col-span-8 text-center lg:text-left text-white space-y-8">
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-4 leading-tight bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-transparent" data-testid="text-display-name">
+                    {profile?.displayName || 'Researcher Profile'}
+                  </h1>
+                  <p className="text-2xl sm:text-3xl mb-6 text-white/90 font-light tracking-wide" data-testid="text-title">
+                    {profile?.title || 'Research Professional'}
+                  </p>
+                </div>
                 
-                {/* Quick Stats Pills */}
-                <div className="flex flex-wrap justify-center lg:justify-start gap-3 mb-6">
-                  <div className="bg-white/15 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                    <span className="text-sm font-medium">✨ Verified Researcher</span>
+                {/* Enhanced Quick Stats Pills */}
+                <div className="flex flex-wrap justify-center lg:justify-start gap-4 mb-8">
+                  <div className="stats-pill px-6 py-3 rounded-full">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <Check className="w-4 h-4 text-yellow-300" /> 
+                      Verified Researcher
+                    </span>
                   </div>
-                  <div className="bg-white/15 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
-                    <span className="text-sm font-medium">🎓 Academic Professional</span>
+                  <div className="stats-pill px-6 py-3 rounded-full">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-blue-300" />
+                      Academic Professional
+                    </span>
+                  </div>
+                  <div className="stats-pill px-6 py-3 rounded-full">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-green-300" />
+                      Active Researcher
+                    </span>
                   </div>
                 </div>
               </div>
               
               {profile?.bio && (
-                <p className="text-lg sm:text-xl text-white/85 max-w-3xl mx-auto lg:mx-0 mb-8 leading-relaxed" data-testid="text-bio">
-                  {profile.bio}
-                </p>
+                <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+                  <p className="text-lg sm:text-xl text-white/90 leading-relaxed font-light" data-testid="text-bio">
+                    {profile.bio}
+                  </p>
+                </div>
               )}
               
-              {/* Action Buttons */}
-              <div className="flex flex-wrap justify-center lg:justify-start gap-4">
+              {/* Enhanced Action Buttons */}
+              <div className="flex flex-wrap justify-center lg:justify-start gap-4 pt-4">
                 <a 
                   href={`https://openalex.org/people/${profile?.openalexId}`} 
                   target="_blank" 
-                  className="group bg-white/15 backdrop-blur-sm text-white px-6 py-3 rounded-lg hover:bg-white/25 transition-all duration-300 border border-white/20 hover:border-white/40 hover:scale-105"
+                  rel="noopener noreferrer"
+                  className="action-button group bg-white/15 backdrop-blur-sm text-white px-8 py-4 rounded-xl hover:bg-white/25 transition-all duration-300 border border-white/20 hover:border-white/40 hover:scale-105 font-medium"
                   data-testid="link-openalex"
                 >
-                  <i className="fas fa-external-link-alt mr-2 group-hover:rotate-12 transition-transform duration-300"></i>
+                  <svg className="w-5 h-5 mr-3 inline group-hover:rotate-12 transition-transform duration-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                  </svg>
                   View on OpenAlex
                 </a>
                 {profile?.cvUrl && (
                   <a 
                     href={profile.cvUrl} 
                     target="_blank" 
-                    className="group bg-white text-primary px-6 py-3 rounded-lg hover:bg-white/90 transition-all duration-300 font-medium shadow-lg hover:shadow-xl hover:scale-105"
+                    rel="noopener noreferrer"
+                    className="action-button group bg-white text-primary px-8 py-4 rounded-xl hover:bg-white/90 transition-all duration-300 font-medium shadow-lg hover:shadow-xl hover:scale-105"
                     data-testid="link-cv"
                   >
-                    <i className="fas fa-file-pdf mr-2 text-red-600 group-hover:scale-110 transition-transform duration-300"></i>
+                    <svg className="w-5 h-5 mr-3 inline text-red-600 group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                    </svg>
                     Download CV
                   </a>
                 )}
-                <button className="group bg-white/10 backdrop-blur-sm text-white px-6 py-3 rounded-lg hover:bg-white/20 transition-all duration-300 border border-white/20 hover:border-white/40">
-                  <i className="fas fa-envelope mr-2 group-hover:scale-110 transition-transform duration-300"></i>
-                  Contact
+                <button className="action-button group bg-gradient-to-r from-accent/20 to-accent/10 backdrop-blur-sm text-white px-8 py-4 rounded-xl hover:from-accent/30 hover:to-accent/20 transition-all duration-300 border border-accent/20 hover:border-accent/40 font-medium">
+                  <svg className="w-5 h-5 mr-3 inline group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                  </svg>
+                  Get In Touch
                 </button>
               </div>
             </div>
           </div>
         </div>
         
-        {/* Decorative Elements */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+        {/* Enhanced Decorative Elements */}
+        <div className="hero-decorative top-20 right-20 w-80 h-80 bg-gradient-to-r from-white/8 to-accent/5"></div>
+        <div className="hero-decorative bottom-20 left-20 w-64 h-64 bg-gradient-to-r from-accent/8 to-primary/5"></div>
+        <div className="hero-decorative top-1/2 right-1/3 w-48 h-48 bg-gradient-to-r from-primary/6 to-white/4"></div>
       </section>
 
       <StatsOverview openalexId={profile?.openalexId || ''} />
