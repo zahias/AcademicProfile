@@ -2,12 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useState, useMemo } from "react";
 
 interface PublicationsProps {
   openalexId: string;
 }
 
 export default function Publications({ openalexId }: PublicationsProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<"year" | "citations" | "title">("year");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [yearFilter, setYearFilter] = useState<string>("all");
+  const [openAccessFilter, setOpenAccessFilter] = useState<"all" | "open" | "closed">("all");
+  const [showAll, setShowAll] = useState(false);
+
   const { data: researcherData, isLoading } = useQuery<{
     profile: any;
     researcher: any;
@@ -46,15 +58,204 @@ export default function Publications({ openalexId }: PublicationsProps) {
 
   const publications = researcherData?.publications || [];
 
+  // Filter and sort publications
+  const filteredAndSortedPublications = useMemo(() => {
+    let filtered = [...publications];
+
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(pub => 
+        pub.title?.toLowerCase().includes(term) ||
+        pub.authorNames?.toLowerCase().includes(term) ||
+        pub.journal?.toLowerCase().includes(term) ||
+        pub.topics?.some((topic: string) => topic.toLowerCase().includes(term))
+      );
+    }
+
+    // Apply year filter
+    if (yearFilter && yearFilter !== "all") {
+      filtered = filtered.filter(pub => pub.publicationYear?.toString() === yearFilter);
+    }
+
+    // Apply open access filter
+    if (openAccessFilter !== "all") {
+      filtered = filtered.filter(pub => 
+        openAccessFilter === "open" ? pub.isOpenAccess : !pub.isOpenAccess
+      );
+    }
+
+    // Sort publications
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case "year":
+          aValue = a.publicationYear || 0;
+          bValue = b.publicationYear || 0;
+          break;
+        case "citations":
+          aValue = a.citationCount || 0;
+          bValue = b.citationCount || 0;
+          break;
+        case "title":
+          aValue = a.title || "";
+          bValue = b.title || "";
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortBy === "title") {
+        return sortOrder === "desc" 
+          ? bValue.localeCompare(aValue)
+          : aValue.localeCompare(bValue);
+      } else {
+        return sortOrder === "desc" ? bValue - aValue : aValue - bValue;
+      }
+    });
+
+    return filtered;
+  }, [publications, searchTerm, sortBy, sortOrder, yearFilter, openAccessFilter]);
+
+  // Get unique years for filter dropdown
+  const availableYears = useMemo(() => {
+    const years = publications
+      .map(pub => pub.publicationYear)
+      .filter(year => year)
+      .sort((a, b) => b - a);
+    return [...new Set(years)];
+  }, [publications]);
+
+  const displayedPublications = showAll ? filteredAndSortedPublications : filteredAndSortedPublications.slice(0, 10);
+
   return (
     <section id="publications" className="py-16" data-testid="section-publications">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Recent Publications</h2>
+          <h2 className="text-3xl font-bold mb-4">
+            Publications
+            {publications.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-sm">
+                {filteredAndSortedPublications.length} of {publications.length}
+              </Badge>
+            )}
+          </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Latest research contributions with real-world impact.
+            Research contributions with search and filtering capabilities.
           </p>
         </div>
+
+        {/* Search and Filter Controls */}
+        {publications.length > 0 && (
+          <Card className="mb-8">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                {/* Search */}
+                <div className="lg:col-span-2">
+                  <label className="text-sm font-medium mb-2 block">Search Publications</label>
+                  <Input
+                    placeholder="Search by title, author, journal, or topic..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                    data-testid="input-search-publications"
+                  />
+                </div>
+
+                {/* Sort By */}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Sort By</label>
+                  <Select value={sortBy} onValueChange={(value: "year" | "citations" | "title") => setSortBy(value)}>
+                    <SelectTrigger data-testid="select-sort-by">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="year">Publication Year</SelectItem>
+                      <SelectItem value="citations">Citation Count</SelectItem>
+                      <SelectItem value="title">Title</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Sort Order */}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Order</label>
+                  <Select value={sortOrder} onValueChange={(value: "desc" | "asc") => setSortOrder(value)}>
+                    <SelectTrigger data-testid="select-sort-order">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desc">Descending</SelectItem>
+                      <SelectItem value="asc">Ascending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Clear Filters */}
+                <div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setSearchTerm("");
+                      setYearFilter("all");
+                      setOpenAccessFilter("all");
+                      setSortBy("year");
+                      setSortOrder("desc");
+                    }}
+                    className="w-full"
+                    data-testid="button-clear-filters"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              {/* Additional Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Year Filter */}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Publication Year</label>
+                  <Select value={yearFilter} onValueChange={setYearFilter}>
+                    <SelectTrigger data-testid="select-year-filter">
+                      <SelectValue placeholder="All years" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All years</SelectItem>
+                      {availableYears.map(year => (
+                        <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Open Access Filter */}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Access Type</label>
+                  <Select value={openAccessFilter} onValueChange={(value: "all" | "open" | "closed") => setOpenAccessFilter(value)}>
+                    <SelectTrigger data-testid="select-access-filter">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="open">Open Access</SelectItem>
+                      <SelectItem value="closed">Closed Access</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Results Info */}
+                <div className="flex items-end">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {displayedPublications.length} of {filteredAndSortedPublications.length} publications
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         
         {publications.length === 0 ? (
           <Card>
@@ -62,9 +263,27 @@ export default function Publications({ openalexId }: PublicationsProps) {
               <p className="text-muted-foreground">No publications available. Please sync your data in the admin panel.</p>
             </CardContent>
           </Card>
+        ) : filteredAndSortedPublications.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-muted-foreground">No publications match your current filters.</p>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearchTerm("");
+                  setYearFilter("all");
+                  setOpenAccessFilter("all");
+                }}
+                className="mt-2"
+                data-testid="button-clear-search"
+              >
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-6">
-            {publications.slice(0, 10).map((publication: any, index: number) => (
+            {displayedPublications.map((publication: any, index: number) => (
               <Card key={publication.id} className="hover:shadow-xl transition-shadow" data-testid={`card-publication-${index}`}>
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
@@ -128,10 +347,30 @@ export default function Publications({ openalexId }: PublicationsProps) {
           </div>
         )}
         
-        {publications.length > 10 && (
+        {filteredAndSortedPublications.length > 10 && !showAll && (
           <div className="text-center mt-12">
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90 mr-4" data-testid="button-view-all-publications">
-              View All Publications
+            <Button 
+              onClick={() => setShowAll(true)}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 mr-4" 
+              data-testid="button-view-all-publications"
+            >
+              View All {filteredAndSortedPublications.length} Publications
+            </Button>
+            <Button variant="outline" data-testid="button-export-bibliography">
+              Export Bibliography
+            </Button>
+          </div>
+        )}
+
+        {showAll && filteredAndSortedPublications.length > 10 && (
+          <div className="text-center mt-12">
+            <Button 
+              variant="outline"
+              onClick={() => setShowAll(false)}
+              className="mr-4" 
+              data-testid="button-show-less"
+            >
+              Show Less
             </Button>
             <Button variant="outline" data-testid="button-export-bibliography">
               Export Bibliography
