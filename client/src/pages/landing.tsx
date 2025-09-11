@@ -4,7 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function Landing() {
   // Fetch public researcher data for Zahi Abdul Sater as demo
-  const { data: researcherData, isLoading } = useQuery({
+  const { data: researcherData, isLoading } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
     queryKey: ["/api/researcher/A5056485484/data"],
     retry: false,
   });
@@ -139,38 +146,38 @@ export default function Landing() {
                     className="w-20 h-20 rounded-full mx-auto mb-4 border-2 border-border"
                   />
                   <h3 className="text-2xl font-bold mb-2" data-testid="text-demo-name">
-                    {researcherData.researcher?.display_name || 'Dr. Zahi Abdul Sater'}
+                    {researcherData?.researcher?.display_name || 'Dr. Zahi Abdul Sater'}
                   </h3>
                   <p className="text-muted-foreground mb-4">
-                    {researcherData.profile?.title || 'Senior Researcher in Health Sciences & Cancer Biology'}
+                    {researcherData?.profile?.title || 'Senior Researcher in Health Sciences & Cancer Biology'}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {researcherData.affiliations?.[0]?.institutionName || 'American University of Beirut'}
+                    {researcherData?.affiliations?.[0]?.institutionName || 'American University of Beirut'}
                   </p>
                 </div>
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary" data-testid="text-demo-works">
-                      {researcherData.researcher?.works_count || 54}
+                      {researcherData?.researcher?.works_count || 54}
                     </div>
                     <div className="text-sm text-muted-foreground">Publications</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-accent" data-testid="text-demo-citations">
-                      {researcherData.researcher?.cited_by_count || 558}
+                      {researcherData?.researcher?.cited_by_count || 558}
                     </div>
                     <div className="text-sm text-muted-foreground">Citations</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary" data-testid="text-demo-h-index">
-                      {researcherData.researcher?.summary_stats?.h_index || 14}
+                      {researcherData?.researcher?.summary_stats?.h_index || 14}
                     </div>
                     <div className="text-sm text-muted-foreground">h-index</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-accent" data-testid="text-demo-i10-index">
-                      {researcherData.researcher?.summary_stats?.i10_index || 17}
+                      {researcherData?.researcher?.summary_stats?.i10_index || 17}
                     </div>
                     <div className="text-sm text-muted-foreground">i10-index</div>
                   </div>

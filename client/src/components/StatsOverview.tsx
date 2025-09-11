@@ -7,7 +7,14 @@ interface StatsOverviewProps {
 }
 
 export default function StatsOverview({ openalexId }: StatsOverviewProps) {
-  const { data: researcherData, isLoading } = useQuery({
+  const { data: researcherData, isLoading } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
   });
@@ -45,7 +52,7 @@ export default function StatsOverview({ openalexId }: StatsOverviewProps) {
     );
   }
 
-  const stats = researcherData.researcher;
+  const stats = researcherData?.researcher;
 
   return (
     <section className="py-16 -mt-10" data-testid="section-stats">

@@ -7,7 +7,14 @@ interface CareerTimelineProps {
 }
 
 export default function CareerTimeline({ openalexId }: CareerTimelineProps) {
-  const { data: researcherData, isLoading } = useQuery({
+  const { data: researcherData, isLoading } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
   });
@@ -59,7 +66,7 @@ export default function CareerTimeline({ openalexId }: CareerTimelineProps) {
             <div className="relative">
               <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-border"></div>
               
-              {affiliations.map((affiliation, index) => {
+              {affiliations.map((affiliation: any, index: number) => {
                 const yearsRange = affiliation.endYear && affiliation.endYear !== affiliation.startYear
                   ? `${affiliation.startYear}-${affiliation.endYear}`
                   : `${affiliation.startYear}-Present`;

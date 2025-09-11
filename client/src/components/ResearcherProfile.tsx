@@ -12,7 +12,19 @@ import { Button } from "@/components/ui/button";
 export default function ResearcherProfile() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   
-  const { data: profile } = useQuery({
+  const { data: profile } = useQuery<{
+    id: string;
+    userId: string;
+    openalexId: string;
+    displayName: string | null;
+    title: string | null;
+    bio: string | null;
+    cvUrl: string | null;
+    isPublic: boolean;
+    lastSyncedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null>({
     queryKey: ["/api/researcher/profile"],
     retry: false,
   });
@@ -80,22 +92,22 @@ export default function ResearcherProfile() {
             />
             
             <h1 className="text-5xl font-bold mb-2" data-testid="text-display-name">
-              {profile.displayName || 'Researcher Profile'}
+              {profile?.displayName || 'Researcher Profile'}
             </h1>
             <p className="text-xl mb-4 text-primary-foreground/90" data-testid="text-title">
-              {profile.title || 'Research Professional'}
+              {profile?.title || 'Research Professional'}
             </p>
             
             <div className="flex flex-wrap justify-center gap-4 mb-8">
               <a 
-                href={`https://openalex.org/people/${profile.openalexId}`} 
+                href={`https://openalex.org/people/${profile?.openalexId}`} 
                 target="_blank" 
                 className="bg-primary-foreground/20 text-primary-foreground px-4 py-2 rounded-full hover:bg-primary-foreground/30 transition-colors"
                 data-testid="link-openalex"
               >
                 <i className="fas fa-external-link-alt mr-2"></i>OpenAlex
               </a>
-              {profile.cvUrl && (
+              {profile?.cvUrl && (
                 <a 
                   href={profile.cvUrl} 
                   target="_blank" 
@@ -107,7 +119,7 @@ export default function ResearcherProfile() {
               )}
             </div>
             
-            {profile.bio && (
+            {profile?.bio && (
               <p className="text-lg text-primary-foreground/80 max-w-3xl mx-auto" data-testid="text-bio">
                 {profile.bio}
               </p>
@@ -116,10 +128,10 @@ export default function ResearcherProfile() {
         </div>
       </section>
 
-      <StatsOverview openalexId={profile.openalexId} />
-      <ResearchTopics openalexId={profile.openalexId} />
-      <Publications openalexId={profile.openalexId} />
-      <CareerTimeline openalexId={profile.openalexId} />
+      <StatsOverview openalexId={profile?.openalexId || ''} />
+      <ResearchTopics openalexId={profile?.openalexId || ''} />
+      <Publications openalexId={profile?.openalexId || ''} />
+      <CareerTimeline openalexId={profile?.openalexId || ''} />
 
       {/* Footer */}
       <footer className="bg-card border-t border-border py-12">
@@ -127,10 +139,10 @@ export default function ResearcherProfile() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="font-semibold text-card-foreground mb-4">
-                {profile.displayName || 'Research Profile'}
+                {profile?.displayName || 'Research Profile'}
               </h3>
               <p className="text-muted-foreground text-sm mb-4">
-                {profile.bio || 'Advancing research with real-world impact.'}
+                {profile?.bio || 'Advancing research with real-world impact.'}
               </p>
             </div>
             
@@ -149,7 +161,7 @@ export default function ResearcherProfile() {
                 Data automatically synchronized with OpenAlex API
               </p>
               <p className="text-muted-foreground text-sm">
-                Last updated: {profile.lastSyncedAt ? new Date(profile.lastSyncedAt).toLocaleDateString() : 'Never'}
+                Last updated: {profile?.lastSyncedAt ? new Date(profile.lastSyncedAt).toLocaleDateString() : 'Never'}
               </p>
             </div>
           </div>

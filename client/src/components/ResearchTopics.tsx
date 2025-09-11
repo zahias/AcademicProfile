@@ -8,7 +8,14 @@ interface ResearchTopicsProps {
 }
 
 export default function ResearchTopics({ openalexId }: ResearchTopicsProps) {
-  const { data: researcherData, isLoading } = useQuery({
+  const { data: researcherData, isLoading } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
   });
@@ -57,8 +64,8 @@ export default function ResearchTopics({ openalexId }: ResearchTopicsProps) {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {topics.slice(0, 9).map((topic, index) => {
-              const maxCount = Math.max(...topics.map(t => t.count));
+            {topics.slice(0, 9).map((topic: any, index: number) => {
+              const maxCount = Math.max(...topics.map((t: any) => t.count));
               const widthPercentage = (topic.count / maxCount) * 100;
               
               return (

@@ -8,7 +8,14 @@ interface PublicationsProps {
 }
 
 export default function Publications({ openalexId }: PublicationsProps) {
-  const { data: researcherData, isLoading } = useQuery({
+  const { data: researcherData, isLoading } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
   });
@@ -57,7 +64,7 @@ export default function Publications({ openalexId }: PublicationsProps) {
           </Card>
         ) : (
           <div className="space-y-6">
-            {publications.slice(0, 10).map((publication, index) => (
+            {publications.slice(0, 10).map((publication: any, index: number) => (
               <Card key={publication.id} className="hover:shadow-xl transition-shadow" data-testid={`card-publication-${index}`}>
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
