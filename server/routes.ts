@@ -1,5 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
+import path from "path";
+import { nanoid } from "nanoid";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { OpenAlexService } from "./services/openalexApi";
@@ -11,6 +14,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   const openalexService = new OpenAlexService();
+
+  // Configure multer for CV uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+      } else {
+        cb(new Error('Only PDF files are allowed'));
+      }
+    },
+  });
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -157,6 +175,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching OpenAlex:", error);
       res.status(500).json({ message: "Failed to search OpenAlex" });
+    }
+  });
+
+  // CV Upload endpoint
+  app.post('/api/upload/cv', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      const userId = req.user.claims.sub;
+      const file = req.file;
+      
+      // Generate unique filename
+      const fileExtension = path.extname(file.originalname);
+      const filename = `cv-${userId}-${nanoid(8)}${fileExtension}`;
+      
+      // Store file in object storage private directory
+      const privateDir = process.env.PRIVATE_OBJECT_DIR;
+      if (!privateDir) {
+        throw new Error('Object storage not configured');
+      }
+      
+      const filePath = path.join(privateDir, filename);
+      
+      // Write file to object storage
+      const fs = await import('fs/promises');
+      await fs.writeFile(filePath, file.buffer);
+      
+      // Generate public URL (you may need to adjust this based on your object storage setup)
+      const publicUrl = `/api/files/cv/${filename}`;
+      
+      res.json({ url: publicUrl, filename });
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      res.status(500).json({ message: 'Failed to upload CV' });
+    }
+  });
+
+  // Serve CV files
+  app.get('/api/files/cv/:filename', isAuthenticated, async (req: any, res) => {
+    try {
+      const { filename } = req.params;
+      const userId = req.user.claims.sub;
+      
+      // Verify the file belongs to the authenticated user
+      if (!filename.includes(`cv-${userId}-`)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      
+      const privateDir = process.env.PRIVATE_OBJECT_DIR;
+      if (!privateDir) {
+        throw new Error('Object storage not configured');
+      }
+      
+      const filePath = path.join(privateDir, filename);
+      
+      // Check if file exists and serve it
+      const fs = await import('fs/promises');
+      try {
+        await fs.access(filePath);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+        
+        const fileStream = await import('fs');
+        fileStream.createReadStream(filePath).pipe(res);
+      } catch (fileError) {
+        res.status(404).json({ message: 'File not found' });
+      }
+    } catch (error) {
+      console.error('Error serving CV file:', error);
+      res.status(500).json({ message: 'Failed to serve file' });
     }
   });
 

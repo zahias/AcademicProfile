@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import type { ResearcherProfile } from "@shared/schema";
 
 interface AdminDashboardProps {
@@ -22,8 +23,16 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     displayName: profile?.displayName || '',
     title: profile?.title || '',
     bio: profile?.bio || '',
+    cvUrl: profile?.cvUrl || '',
+    currentAffiliation: profile?.currentAffiliation || '',
+    currentPosition: profile?.currentPosition || '',
+    currentAffiliationUrl: profile?.currentAffiliationUrl || '',
+    currentAffiliationStartDate: profile?.currentAffiliationStartDate || '',
     isPublic: profile?.isPublic ?? true,
   });
+
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -95,9 +104,49 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCvUpload = async (file: File): Promise<string> => {
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await fetch('/api/upload/cv', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload CV');
+      }
+      
+      const result = await response.json();
+      return result.url;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    profileMutation.mutate(formData);
+    
+    let finalFormData = { ...formData };
+    
+    // Upload CV if a new file is selected
+    if (cvFile) {
+      try {
+        const cvUrl = await handleCvUpload(cvFile);
+        finalFormData.cvUrl = cvUrl;
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to upload CV",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    profileMutation.mutate(finalFormData);
   };
 
   if (!isOpen) return null;
@@ -121,7 +170,7 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
           </CardHeader>
           
           <CardContent className="space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form id="profile-form" onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="openalexId">OpenAlex ID *</Label>
                 <Input
@@ -170,6 +219,111 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
                   data-testid="textarea-bio"
                 />
               </div>
+
+              <Separator className="my-6" />
+              
+              {/* CV Upload Section */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-lg">CV & Documents</h3>
+                
+                <div>
+                  <Label htmlFor="cv-upload">Upload CV (PDF)</Label>
+                  <div className="mt-2">
+                    {formData.cvUrl && !cvFile && (
+                      <div className="flex items-center gap-2 mb-2 p-2 bg-muted rounded">
+                        <i className="fas fa-file-pdf text-red-600"></i>
+                        <span className="text-sm">Current CV uploaded</span>
+                        <a 
+                          href={formData.cvUrl} 
+                          target="_blank" 
+                          className="text-primary hover:underline text-sm"
+                        >
+                          View
+                        </a>
+                      </div>
+                    )}
+                    <Input
+                      id="cv-upload"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => setCvFile(e.target.files?.[0] || null)}
+                      className="cursor-pointer"
+                      data-testid="input-cv-upload"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Upload a PDF file of your CV (max 10MB)
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="cvUrl">Or enter CV URL</Label>
+                  <Input
+                    id="cvUrl"
+                    value={formData.cvUrl}
+                    onChange={(e) => setFormData({ ...formData, cvUrl: e.target.value })}
+                    placeholder="https://example.com/my-cv.pdf"
+                    data-testid="input-cv-url"
+                  />
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+              
+              {/* Current Affiliation Section */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-lg">Current Affiliation</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="currentAffiliation">Institution Name</Label>
+                    <Input
+                      id="currentAffiliation"
+                      value={formData.currentAffiliation}
+                      onChange={(e) => setFormData({ ...formData, currentAffiliation: e.target.value })}
+                      placeholder="University of Example"
+                      data-testid="input-current-affiliation"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="currentPosition">Current Position</Label>
+                    <Input
+                      id="currentPosition"
+                      value={formData.currentPosition}
+                      onChange={(e) => setFormData({ ...formData, currentPosition: e.target.value })}
+                      placeholder="Associate Professor"
+                      data-testid="input-current-position"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="currentAffiliationUrl">Institution Website</Label>
+                    <Input
+                      id="currentAffiliationUrl"
+                      value={formData.currentAffiliationUrl}
+                      onChange={(e) => setFormData({ ...formData, currentAffiliationUrl: e.target.value })}
+                      placeholder="https://university.edu"
+                      data-testid="input-current-affiliation-url"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="currentAffiliationStartDate">Start Date</Label>
+                    <Input
+                      id="currentAffiliationStartDate"
+                      type="date"
+                      value={formData.currentAffiliationStartDate}
+                      onChange={(e) => setFormData({ ...formData, currentAffiliationStartDate: e.target.value })}
+                      data-testid="input-current-affiliation-start-date"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
               
               <div className="flex items-center space-x-2">
                 <input
@@ -230,11 +384,17 @@ export default function AdminDashboard({ isOpen, onClose, profile }: AdminDashbo
               Cancel
             </Button>
             <Button 
-              onClick={handleSubmit}
-              disabled={profileMutation.isPending || !formData.openalexId}
+              type="submit"
+              form="profile-form"
+              disabled={profileMutation.isPending || isUploading || !formData.openalexId}
               data-testid="button-save"
             >
-              {profileMutation.isPending ? (
+              {isUploading ? (
+                <>
+                  <i className="fas fa-spinner fa-spin mr-2"></i>
+                  Uploading CV...
+                </>
+              ) : profileMutation.isPending ? (
                 <>
                   <i className="fas fa-spinner fa-spin mr-2"></i>
                   Saving...
