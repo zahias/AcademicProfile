@@ -1,3 +1,4 @@
+import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import Navigation from "./Navigation";
 import StatsOverview from "./StatsOverview";
@@ -7,17 +8,48 @@ import Publications from "./Publications";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, GraduationCap, TrendingUp } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { ResearcherProfile } from "@shared/schema";
 
 export default function ResearcherProfile() {
+  const { id } = useParams();
   
-  const { data: profile } = useQuery<ResearcherProfile | null>({
-    queryKey: ["/api/researcher/profile"],
+  const { data: researcherData, isLoading, error } = useQuery<{
+    profile: any;
+    researcher: any;
+    topics: any[];
+    publications: any[];
+    affiliations: any[];
+    lastSynced: string;
+  } | null>({
+    queryKey: [`/api/researcher/${id}/data`],
     retry: false,
   });
 
-  // If no profile exists, show message (no setup available for public)
-  if (!profile) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <Skeleton className="h-8 w-64 mx-auto mb-4" />
+                <Skeleton className="h-4 w-96 mx-auto mb-8" />
+                <div className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4 mx-auto" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // If no profile exists, show message
+  if (error || !researcherData || !researcherData.profile) {
     return (
       <div className="min-h-screen bg-background">
         <Navigation />
@@ -28,7 +60,7 @@ export default function ResearcherProfile() {
               <div className="text-center">
                 <h1 className="text-3xl font-bold mb-4">No Profile Available</h1>
                 <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-                  This researcher profile is not available or has not been configured yet.
+                  The researcher profile you're looking for doesn't exist or isn't public yet.
                 </p>
                 
               </div>
@@ -39,8 +71,11 @@ export default function ResearcherProfile() {
     );
   }
 
+  const { profile, researcher } = researcherData;
+  const openalexId = profile.openalexId || id || '';
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" data-testid="page-researcher-profile">
       <Navigation />
       
       {/* Enhanced Hero Section */}
@@ -75,10 +110,10 @@ export default function ResearcherProfile() {
               <div className="space-y-6">
                 <div>
                   <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-4 leading-tight bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-transparent" data-testid="text-display-name">
-                    {profile?.displayName || 'Researcher Profile'}
+                    {profile.displayName || researcher.display_name || 'Researcher Profile'}
                   </h1>
                   <p className="text-2xl sm:text-3xl mb-6 text-white/90 font-light tracking-wide" data-testid="text-title">
-                    {profile?.title || 'Research Professional'}
+                    {profile.title || 'Research Professional'}
                   </p>
                 </div>
                 
@@ -105,7 +140,7 @@ export default function ResearcherProfile() {
                 </div>
               </div>
               
-              {profile?.bio && (
+              {profile.bio && (
                 <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
                   <p className="text-lg sm:text-xl text-white/90 leading-relaxed font-light" data-testid="text-bio">
                     {profile.bio}
@@ -116,7 +151,7 @@ export default function ResearcherProfile() {
               {/* Enhanced Action Buttons */}
               <div className="flex flex-wrap justify-center lg:justify-start gap-4 pt-4">
                 <a 
-                  href={`https://openalex.org/people/${profile?.openalexId}`} 
+                  href={`https://openalex.org/people/${openalexId}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="action-button group bg-white/15 backdrop-blur-sm text-white px-8 py-4 rounded-xl hover:bg-white/25 transition-all duration-300 border border-white/20 hover:border-white/40 hover:scale-105 font-medium"
@@ -128,7 +163,7 @@ export default function ResearcherProfile() {
                   </svg>
                   View on OpenAlex
                 </a>
-                {profile?.cvUrl && (
+                {profile.cvUrl && (
                   <a 
                     href={profile.cvUrl} 
                     target="_blank" 
@@ -160,10 +195,10 @@ export default function ResearcherProfile() {
         <div className="hero-decorative top-1/2 right-1/3 w-48 h-48 bg-gradient-to-r from-primary/6 to-white/4"></div>
       </section>
 
-      <StatsOverview openalexId={profile?.openalexId || ''} />
-      <PublicationAnalytics openalexId={profile?.openalexId || ''} />
-      <ResearchTopics openalexId={profile?.openalexId || ''} />
-      <Publications openalexId={profile?.openalexId || ''} />
+      <StatsOverview openalexId={openalexId} />
+      <PublicationAnalytics openalexId={openalexId} />
+      <ResearchTopics openalexId={openalexId} />
+      <Publications openalexId={openalexId} />
 
       {/* Footer */}
       <footer className="bg-card border-t border-border py-12">
@@ -171,10 +206,10 @@ export default function ResearcherProfile() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="font-semibold text-card-foreground mb-4">
-                {profile?.displayName || 'Research Profile'}
+                {profile.displayName || researcher.display_name || 'Research Profile'}
               </h3>
               <p className="text-muted-foreground text-sm mb-4">
-                {profile?.bio || 'Advancing research with real-world impact.'}
+                {profile.bio || 'Advancing research with real-world impact.'}
               </p>
             </div>
             
@@ -192,7 +227,7 @@ export default function ResearcherProfile() {
                 Data automatically synchronized with OpenAlex API
               </p>
               <p className="text-muted-foreground text-sm">
-                Last updated: {profile?.lastSyncedAt ? new Date(profile.lastSyncedAt).toLocaleDateString() : 'Never'}
+                Last updated: {profile.lastSyncedAt ? new Date(profile.lastSyncedAt).toLocaleDateString() : 'Never'}
               </p>
             </div>
           </div>

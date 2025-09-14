@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import ResearcherPage from "@/pages/researcher";
+import ResearcherProfile from "@/components/ResearcherProfile";
 
 function Router() {
   return (
@@ -12,7 +12,7 @@ function Router() {
       <Route path="/">
         <Redirect to="/researcher/A5056485484" />
       </Route>
-      <Route path="/researcher/:id" component={ResearcherPage} />
+      <Route path="/researcher/:id" component={ResearcherProfile} />
       <Route component={NotFound} />
     </Switch>
   );
