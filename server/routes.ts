@@ -1,9 +1,21 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { EventEmitter } from "events";
 import { storage } from "./storage";
 import { OpenAlexService } from "./services/openalexApi";
 import { insertResearcherProfileSchema, updateResearcherProfileSchema, type ResearchTopic, type Publication, type Affiliation } from "@shared/schema";
 import { z } from "zod";
+
+// Event emitter for real-time updates
+const updateEmitter = new EventEmitter();
+
+// SSE connection management
+interface SSEConnection {
+  res: Response;
+  openalexId?: string;
+}
+
+const sseConnections = new Set<SSEConnection>();
 
 // Admin authentication middleware
 function adminAuthMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -293,9 +305,97 @@ function generateStaticHTML(data: any): string {
 </html>`;
 }
 
+// Helper function to broadcast data updates
+function broadcastResearcherUpdate(openalexId: string, updateType: 'profile' | 'sync' | 'create') {
+  // Emit to event listeners
+  updateEmitter.emit('researcher-update', { openalexId, updateType, timestamp: new Date().toISOString() });
+  
+  // Send SSE to connected clients
+  const message = JSON.stringify({ openalexId, updateType, timestamp: new Date().toISOString() });
+  
+  for (const connection of Array.from(sseConnections)) {
+    try {
+      connection.res.write(`data: ${message}\n\n`);
+    } catch (error) {
+      // Remove failed connections
+      sseConnections.delete(connection);
+    }
+  }
+}
+
+// Clean up closed SSE connections
+function cleanupSSEConnections() {
+  for (const connection of Array.from(sseConnections)) {
+    if (connection.res.destroyed || connection.res.finished) {
+      sseConnections.delete(connection);
+    }
+  }
+}
+
+// Clean up connections every 30 seconds
+setInterval(cleanupSSEConnections, 30000);
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const openalexService = new OpenAlexService();
 
+  // Server-Sent Events endpoint for real-time updates
+  app.get('/api/events', (req, res) => {
+    console.log('📡 New SSE connection request from:', req.ip);
+    
+    try {
+      // Set proper SSE headers - minimal approach
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      // Send initial connection message immediately
+      res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+      console.log('✅ SSE connection established, sent initial message');
+
+      // Store connection
+      const connection: SSEConnection = { res };
+      sseConnections.add(connection);
+      console.log(`📊 Total SSE connections: ${sseConnections.size}`);
+
+      // Keep connection alive with heartbeat  
+      const heartbeat = setInterval(() => {
+        try {
+          if (!res.destroyed && !res.finished) {
+            res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() })}\n\n`);
+          } else {
+            console.log('🧹 Cleaning up dead SSE connection');
+            clearInterval(heartbeat);
+            sseConnections.delete(connection);
+          }
+        } catch (error) {
+          console.error('❌ SSE heartbeat error:', error);
+          clearInterval(heartbeat);
+          sseConnections.delete(connection);
+        }
+      }, 15000); // More frequent heartbeat
+
+      // Handle client disconnect
+      req.on('close', () => {
+        console.log('🔌 SSE client disconnected');
+        clearInterval(heartbeat);
+        sseConnections.delete(connection);
+        console.log(`📊 Remaining SSE connections: ${sseConnections.size}`);
+      });
+
+      req.on('error', (error) => {
+        console.error('❌ SSE request error:', error);
+        clearInterval(heartbeat);
+        sseConnections.delete(connection);
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to establish SSE connection:', error);
+      res.status(500).end();
+    }
+  });
 
   // Public researcher data routes
   app.get('/api/researcher/:openalexId/data', async (req, res) => {
@@ -337,8 +437,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profileData = insertResearcherProfileSchema.parse(req.body);
       const profile = await storage.upsertResearcherProfile(profileData);
       
-      // Trigger initial data sync from OpenAlex (non-blocking)
+      // Broadcast update to connected clients
       if (profile.openalexId) {
+        broadcastResearcherUpdate(profile.openalexId, 'create');
+        
+        // Trigger initial data sync from OpenAlex (non-blocking)
         openalexService.syncResearcherData(profile.openalexId).catch(error => {
           console.error(`Failed to sync OpenAlex data for ${profile.openalexId}:`, error);
         });
@@ -372,6 +475,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const updatedProfile = await storage.updateResearcherProfile(profile.id, updates);
+      
+      // Broadcast update to connected clients
+      broadcastResearcherUpdate(openalexId, 'profile');
+      
       res.json(updatedProfile);
     } catch (error) {
       console.error("Error updating researcher profile:", error);
@@ -400,11 +507,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastSyncedAt: new Date()
       });
 
+      // Broadcast sync update to connected clients
+      broadcastResearcherUpdate(openalexId, 'sync');
+
       res.json({ message: "Data sync completed successfully" });
     } catch (error) {
       console.error("Error syncing researcher data:", error);
       res.status(500).json({ message: "Failed to sync researcher data" });
     }
+  });
+
+  // Test endpoint to manually trigger SSE updates (for debugging)
+  app.post('/api/test/broadcast/:openalexId', (req, res) => {
+    const { openalexId } = req.params;
+    console.log(`🧪 Test broadcast triggered for researcher: ${openalexId}`);
+    
+    // Broadcast test update
+    broadcastResearcherUpdate(openalexId, 'profile');
+    
+    res.json({ 
+      message: `Test broadcast sent for researcher ${openalexId}`,
+      connectionsNotified: sseConnections.size,
+      timestamp: new Date().toISOString()
+    });
   });
 
   // Search researchers by OpenAlex ID (public)
@@ -457,6 +582,408 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error exporting researcher profile:", error);
       res.status(500).json({ message: "Failed to export researcher profile" });
+    }
+  });
+
+  // Admin web interface (ADMIN ONLY)
+  app.get('/admin', adminRateLimit, adminAuthMiddleware, async (req, res) => {
+    try {
+      // Get all public researcher profiles for the interface
+      const profiles = await storage.getAllPublicResearcherProfiles();
+      
+      const adminHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Profile Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader { border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .success-flash { background: #d4edda !important; color: #155724 !important; border: 1px solid #c3e6cb !important; }
+        .error-flash { background: #f8d7da !important; color: #721c24 !important; border: 1px solid #f5c6cb !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Research Profile Admin</h1>
+            <p class="text-gray-600">Manage researcher profiles and data synchronization</p>
+        </header>
+
+        <!-- Status Messages -->
+        <div id="messageContainer" class="mb-6 hidden">
+            <div id="messageBox" class="p-4 rounded-lg"></div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Quick Actions</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="showCreateForm()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Create New Profile
+                </button>
+                <button onclick="refreshProfiles()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                    </svg>
+                    Refresh List
+                </button>
+                <button onclick="bulkSync()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition-colors">
+                    <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732L14.146 12.8l-1.179 4.456a1 1 0 01-1.806.632L8.5 15.134l-2.354 2.754a1 1 0 01-1.806-.632L3.146 12.8.5 10.866a1 1 0 010-1.732L3.146 7.2l1.179-4.456A1 1 0 015.292 2H12z" clip-rule="evenodd" />
+                    </svg>
+                    Sync All Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Researcher Profiles List -->
+        <div class="bg-white rounded-lg shadow-sm">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-semibold">Existing Profiles (${profiles.length})</h2>
+            </div>
+            <div id="profilesList" class="divide-y divide-gray-200">
+                ${profiles.map(profile => `
+                <div class="p-6 hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center mb-2">
+                                <h3 class="text-xl font-semibold text-gray-900 mr-3">${escapeHtml(profile.displayName) || 'Unnamed Profile'}</h3>
+                                <span class="px-2 py-1 text-xs rounded-full ${profile.isPublic ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                    ${profile.isPublic ? 'Public' : 'Private'}
+                                </span>
+                            </div>
+                            <p class="text-gray-600 mb-1">${escapeHtml(profile.title) || 'No title set'}</p>
+                            <p class="text-sm text-gray-500">OpenAlex ID: ${escapeHtml(profile.openalexId)}</p>
+                            <p class="text-sm text-gray-500">Last Synced: ${profile.lastSyncedAt ? new Date(profile.lastSyncedAt).toLocaleDateString() : 'Never'}</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="editProfile('${profile.openalexId}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors text-sm">
+                                Edit
+                            </button>
+                            <button onclick="syncProfile('${profile.openalexId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition-colors text-sm">
+                                Sync
+                            </button>
+                            <a href="/researcher/${profile.openalexId}" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition-colors text-sm">
+                                View
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <!-- Edit/Create Modal -->
+        <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 id="modalTitle" class="text-2xl font-semibold">Edit Researcher Profile</h3>
+                    </div>
+                    <form id="profileForm" class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Left Column -->
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="openalexId" class="block text-sm font-medium text-gray-700 mb-2">OpenAlex ID *</label>
+                                    <input type="text" id="openalexId" name="openalexId" required 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="A1234567890">
+                                    <p class="text-xs text-gray-500 mt-1">e.g., A1234567890 (from OpenAlex)</p>
+                                </div>
+                                
+                                <div>
+                                    <label for="displayName" class="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                                    <input type="text" id="displayName" name="displayName" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="Dr. John Smith">
+                                </div>
+                                
+                                <div>
+                                    <label for="title" class="block text-sm font-medium text-gray-700 mb-2">Title/Position</label>
+                                    <input type="text" id="title" name="title" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="Professor of Computer Science">
+                                </div>
+                                
+                                <div>
+                                    <label for="currentAffiliation" class="block text-sm font-medium text-gray-700 mb-2">Current Affiliation</label>
+                                    <input type="text" id="currentAffiliation" name="currentAffiliation" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="Stanford University">
+                                </div>
+                                
+                                <div>
+                                    <label for="currentPosition" class="block text-sm font-medium text-gray-700 mb-2">Current Position</label>
+                                    <input type="text" id="currentPosition" name="currentPosition" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="Senior Research Scientist">
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column -->
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="bio" class="block text-sm font-medium text-gray-700 mb-2">Biography</label>
+                                    <textarea id="bio" name="bio" rows="4" 
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              placeholder="Brief description of research interests and background..."></textarea>
+                                </div>
+                                
+                                <div>
+                                    <label for="cvUrl" class="block text-sm font-medium text-gray-700 mb-2">CV URL</label>
+                                    <input type="url" id="cvUrl" name="cvUrl" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="https://example.com/cv.pdf">
+                                </div>
+                                
+                                <div>
+                                    <label for="currentAffiliationUrl" class="block text-sm font-medium text-gray-700 mb-2">Affiliation URL</label>
+                                    <input type="url" id="currentAffiliationUrl" name="currentAffiliationUrl" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           placeholder="https://stanford.edu">
+                                </div>
+                                
+                                <div>
+                                    <label for="currentAffiliationStartDate" class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                    <input type="date" id="currentAffiliationStartDate" name="currentAffiliationStartDate" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="isPublic" name="isPublic" checked class="mr-2">
+                                        <span class="text-sm text-gray-700">Make profile public</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+                            <button type="button" onclick="closeModal()" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors">
+                                Cancel
+                            </button>
+                            <div class="space-x-3">
+                                <button type="button" onclick="previewChanges()" class="px-6 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors">
+                                    Preview
+                                </button>
+                                <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
+                                    <span id="saveButtonText">Save Profile</span>
+                                    <div id="saveLoader" class="loader hidden"></div>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const adminToken = prompt("Enter admin token:");
+        if (!adminToken) {
+            alert("Admin token required!");
+            window.location.href = "/";
+        }
+
+        let currentEditingProfile = null;
+
+        // API helper function
+        async function apiRequest(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': \`Bearer \${adminToken}\`
+                }
+            };
+            
+            const response = await fetch(url, {
+                ...defaultOptions,
+                ...options,
+                headers: { ...defaultOptions.headers, ...options.headers }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'API request failed');
+            }
+            
+            return response.json();
+        }
+
+        // Show success message
+        function showMessage(message, isError = false) {
+            const container = document.getElementById('messageContainer');
+            const box = document.getElementById('messageBox');
+            
+            box.textContent = message;
+            box.className = \`p-4 rounded-lg \${isError ? 'error-flash' : 'success-flash'}\`;
+            container.classList.remove('hidden');
+            
+            setTimeout(() => container.classList.add('hidden'), 5000);
+        }
+
+        // Show create form
+        function showCreateForm() {
+            currentEditingProfile = null;
+            document.getElementById('modalTitle').textContent = 'Create New Researcher Profile';
+            document.getElementById('profileForm').reset();
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+
+        // Edit profile
+        async function editProfile(openalexId) {
+            try {
+                // For now, we'll load the existing data from the current display
+                // In a real app, you'd fetch fresh data from the API
+                const profileData = Array.from(document.querySelectorAll('#profilesList > div')).find(el => 
+                    el.textContent.includes(openalexId)
+                );
+                
+                if (!profileData) {
+                    throw new Error('Profile not found');
+                }
+                
+                currentEditingProfile = openalexId;
+                document.getElementById('modalTitle').textContent = 'Edit Researcher Profile';
+                
+                // Pre-populate form (simplified - in real implementation would fetch from API)
+                document.getElementById('openalexId').value = openalexId;
+                document.getElementById('openalexId').readOnly = true; // Don't allow changing ID for existing profiles
+                
+                document.getElementById('editModal').classList.remove('hidden');
+            } catch (error) {
+                showMessage(\`Failed to load profile: \${error.message}\`, true);
+            }
+        }
+
+        // Save profile
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const saveButton = document.getElementById('saveButtonText');
+            const saveLoader = document.getElementById('saveLoader');
+            
+            saveButton.classList.add('hidden');
+            saveLoader.classList.remove('hidden');
+            
+            try {
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData.entries());
+                data.isPublic = document.getElementById('isPublic').checked;
+                
+                let response;
+                if (currentEditingProfile) {
+                    // Update existing profile
+                    response = await apiRequest(\`/api/admin/researcher/profile/\${currentEditingProfile}\`, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    // Create new profile - need to add userId (for now, using a placeholder)
+                    data.userId = 'admin-created'; // In real implementation, would use proper user management
+                    response = await apiRequest('/api/admin/researcher/profile', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                }
+                
+                showMessage(\`Profile \${currentEditingProfile ? 'updated' : 'created'} successfully!\`);
+                closeModal();
+                refreshProfiles();
+            } catch (error) {
+                showMessage(\`Failed to save profile: \${error.message}\`, true);
+            } finally {
+                saveButton.classList.remove('hidden');
+                saveLoader.classList.add('hidden');
+            }
+        });
+
+        // Sync profile
+        async function syncProfile(openalexId) {
+            try {
+                showMessage('Syncing data from OpenAlex...');
+                await apiRequest(\`/api/admin/researcher/\${openalexId}/sync\`, {
+                    method: 'POST'
+                });
+                showMessage('Data synced successfully!');
+                refreshProfiles();
+            } catch (error) {
+                showMessage(\`Failed to sync profile: \${error.message}\`, true);
+            }
+        }
+
+        // Preview changes
+        function previewChanges() {
+            const formData = new FormData(document.getElementById('profileForm'));
+            const data = Object.fromEntries(formData.entries());
+            const openalexId = data.openalexId;
+            
+            if (openalexId) {
+                window.open(\`/researcher/\${openalexId}\`, '_blank');
+            } else {
+                alert('Please enter an OpenAlex ID to preview');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            document.getElementById('openalexId').readOnly = false;
+            currentEditingProfile = null;
+        }
+
+        // Refresh profiles list
+        function refreshProfiles() {
+            window.location.reload();
+        }
+
+        // Bulk sync all profiles
+        async function bulkSync() {
+            if (!confirm('This will sync all profiles with OpenAlex. This may take a while. Continue?')) {
+                return;
+            }
+            
+            const profiles = Array.from(document.querySelectorAll('#profilesList > div'));
+            let completed = 0;
+            
+            showMessage(\`Syncing \${profiles.length} profiles...\`);
+            
+            for (const profile of profiles) {
+                const openalexIdMatch = profile.textContent.match(/OpenAlex ID: ([A-Za-z0-9]+)/);
+                if (openalexIdMatch) {
+                    try {
+                        await syncProfile(openalexIdMatch[1]);
+                        completed++;
+                    } catch (error) {
+                        console.error(\`Failed to sync \${openalexIdMatch[1]}:\`, error);
+                    }
+                }
+            }
+            
+            showMessage(\`Bulk sync completed: \${completed}/\${profiles.length} profiles synced successfully!\`);
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('editModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('editModal')) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>`;
+      
+      res.send(adminHTML);
+    } catch (error) {
+      console.error("Error serving admin interface:", error);
+      res.status(500).json({ message: "Failed to load admin interface" });
     }
   });
 

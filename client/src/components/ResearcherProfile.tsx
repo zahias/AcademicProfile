@@ -7,12 +7,16 @@ import ResearchTopics from "./ResearchTopics";
 import Publications from "./Publications";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, GraduationCap, TrendingUp } from "lucide-react";
+import { Check, GraduationCap, TrendingUp, Wifi, WifiOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import type { ResearcherProfile } from "@shared/schema";
 
 export default function ResearcherProfile() {
   const { id } = useParams();
+  
+  // Enable real-time updates for this researcher profile
+  const { isConnected } = useRealtimeUpdates();
   
   const { data: researcherData, isLoading, error } = useQuery<{
     profile: any;
@@ -79,7 +83,7 @@ export default function ResearcherProfile() {
       <Navigation />
       
       {/* Enhanced Hero Section */}
-      <section className="hero-banner min-h-[85vh] flex items-center">
+      <section id="overview" className="hero-banner min-h-[85vh] flex items-center">
         {/* Enhanced Background pattern overlay */}
         <div className="hero-pattern"></div>
         
@@ -135,6 +139,22 @@ export default function ResearcherProfile() {
                     <span className="text-sm font-medium flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-green-300" />
                       Active Researcher
+                    </span>
+                  </div>
+                  {/* Real-time Connection Status */}
+                  <div className={`stats-pill px-6 py-3 rounded-full ${isConnected ? 'bg-green-500/20 border-green-400/30' : 'bg-red-500/20 border-red-400/30'}`} data-testid="status-realtime-connection">
+                    <span className="text-sm font-medium flex items-center gap-2">
+                      {isConnected ? (
+                        <>
+                          <Wifi className="w-4 h-4 text-green-300" />
+                          Live Updates
+                        </>
+                      ) : (
+                        <>
+                          <WifiOff className="w-4 h-4 text-red-300" />
+                          Connecting...
+                        </>
+                      )}
                     </span>
                   </div>
                 </div>

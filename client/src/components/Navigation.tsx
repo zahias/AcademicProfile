@@ -12,7 +12,7 @@ export default function Navigation() {
             <a href="#overview" className="text-muted-foreground hover:text-foreground transition-colors">Overview</a>
             <a href="#research" className="text-muted-foreground hover:text-foreground transition-colors">Research</a>
             <a href="#publications" className="text-muted-foreground hover:text-foreground transition-colors">Publications</a>
-            <a href="#timeline" className="text-muted-foreground hover:text-foreground transition-colors">Timeline</a>
+            <a href="#analytics" className="text-muted-foreground hover:text-foreground transition-colors">Analytics</a>
           </div>
           <div className="md:hidden">
             <button className="text-muted-foreground hover:text-foreground">

@@ -102,13 +102,6 @@ export default function ResearchTopics({ openalexId }: ResearchTopicsProps) {
           </div>
         )}
         
-        {topics.length > 9 && (
-          <div className="text-center mt-12">
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="button-view-all-topics">
-              View All Research Areas
-            </Button>
-          </div>
-        )}
       </div>
     </section>
   );
