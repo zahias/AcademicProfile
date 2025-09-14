@@ -13,13 +13,6 @@ export default function Navigation() {
             <a href="#research" className="text-muted-foreground hover:text-foreground transition-colors">Research</a>
             <a href="#publications" className="text-muted-foreground hover:text-foreground transition-colors">Publications</a>
             <a href="#timeline" className="text-muted-foreground hover:text-foreground transition-colors">Timeline</a>
-            <Button 
-              variant="outline"
-              onClick={() => window.location.href = '/'}
-              data-testid="button-home"
-            >
-              Home
-            </Button>
           </div>
           <div className="md:hidden">
             <button className="text-muted-foreground hover:text-foreground">

@@ -84,15 +84,6 @@ export default function ResearcherPage() {
               <div className="flex items-center">
                 <span className="font-semibold text-xl text-primary">Research Profile Platform</span>
               </div>
-              <div className="flex items-center">
-                <Button 
-                  onClick={() => window.location.href = '/'}
-                  variant="outline"
-                  data-testid="button-home"
-                >
-                  Home
-                </Button>
-              </div>
             </div>
           </div>
         </nav>
@@ -104,13 +95,6 @@ export default function ResearcherPage() {
               <p className="text-muted-foreground mb-8">
                 The researcher profile you're looking for doesn't exist or isn't public yet.
               </p>
-              <Button 
-                onClick={() => window.location.href = '/'}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                data-testid="button-back-home"
-              >
-                Back to Home
-              </Button>
             </CardContent>
           </Card>
         </div>
@@ -128,15 +112,6 @@ export default function ResearcherPage() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <span className="font-semibold text-xl text-primary">Research Profile Platform</span>
-            </div>
-            <div className="flex items-center">
-              <Button 
-                onClick={() => window.location.href = '/'}
-                variant="outline"
-                data-testid="button-home"
-              >
-                Back to Directory
-              </Button>
             </div>
           </div>
         </div>

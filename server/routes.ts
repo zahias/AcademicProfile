@@ -296,34 +296,6 @@ function generateStaticHTML(data: any): string {
 export async function registerRoutes(app: Express): Promise<Server> {
   const openalexService = new OpenAlexService();
 
-  // Get all public researcher profiles for directory
-  app.get('/api/researchers/public', async (req, res) => {
-    try {
-      const profiles = await storage.getAllPublicResearcherProfiles();
-      
-      // Get basic stats for each researcher
-      const profilesWithStats = await Promise.all(
-        profiles.map(async (profile) => {
-          const researcherData = await storage.getOpenalexData(profile.openalexId, 'researcher');
-          const data = researcherData?.data as OpenAlexResearcherData | undefined;
-          return {
-            ...profile,
-            stats: data ? {
-              worksCount: data.works_count || 0,
-              citedByCount: data.cited_by_count || 0,
-              hIndex: data.summary_stats?.h_index || 0,
-              i10Index: data.summary_stats?.i10_index || 0,
-            } : null
-          };
-        })
-      );
-      
-      res.json(profilesWithStats);
-    } catch (error) {
-      console.error("Error fetching public researcher profiles:", error);
-      res.status(500).json({ message: "Failed to fetch researcher profiles" });
-    }
-  });
 
   // Public researcher data routes
   app.get('/api/researcher/:openalexId/data', async (req, res) => {

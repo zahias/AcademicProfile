@@ -31,13 +31,6 @@ export default function ResearcherProfile() {
                   This researcher profile is not available or has not been configured yet.
                 </p>
                 
-                <Button 
-                  onClick={() => window.location.href = '/'}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  data-testid="button-back-home"
-                >
-                  Back to Directory
-                </Button>
               </div>
             </CardContent>
           </Card>
