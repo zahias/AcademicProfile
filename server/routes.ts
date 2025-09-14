@@ -17,7 +17,7 @@ interface SSEConnection {
 
 const sseConnections = new Set<SSEConnection>();
 
-// Admin authentication middleware
+// Admin authentication middleware (for API endpoints - requires Bearer token)
 function adminAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   // Check for admin API token
   const adminToken = process.env.ADMIN_API_TOKEN;
@@ -52,6 +52,58 @@ function adminAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   // Log admin operation for audit trail
   console.log(`Admin operation: ${req.method} ${req.path} from ${clientIP}`);
   next();
+}
+
+// Session-based admin authentication middleware (for web interface)
+function adminSessionAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  // Check for admin API token
+  const adminToken = process.env.ADMIN_API_TOKEN;
+  if (!adminToken) {
+    console.error('ADMIN_API_TOKEN environment variable not set');
+    return res.status(500).json({ message: 'Admin authentication not configured' });
+  }
+
+  // Check session first
+  if ((req.session as any)?.isAdmin) {
+    // Log admin operation for audit trail
+    console.log(`Admin web access: ${req.method} ${req.path} from ${req.ip}`);
+    return next();
+  }
+
+  // Check Authorization header as fallback
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    if (token === adminToken) {
+      // Set session for future requests
+      (req.session as any).isAdmin = true;
+      console.log(`Admin operation: ${req.method} ${req.path} from ${req.ip}`);
+      return next();
+    }
+  }
+
+  // Not authenticated - this will be handled by route to show login form
+  return next();
+}
+
+// Helper function to check if request is authenticated
+function isAuthenticated(req: Request): boolean {
+  const adminToken = process.env.ADMIN_API_TOKEN;
+  if (!adminToken) return false;
+
+  // Check session
+  if ((req.session as any)?.isAdmin) {
+    return true;
+  }
+
+  // Check Bearer token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    return token === adminToken;
+  }
+
+  return false;
 }
 
 // Rate limiting for admin endpoints (simple in-memory implementation)
@@ -136,6 +188,115 @@ function validateAndSanitizeUrl(url: string | undefined | null): string {
   
   // Default to safe fallback
   return '#';
+}
+
+// Login form HTML template
+function generateLoginFormHTML(errorMessage?: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Research Profile Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .form-container { backdrop-filter: blur(10px); background: rgba(255,255,255,0.95); }
+        .input-focus:focus { transform: scale(1.02); transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    <div class="form-container rounded-lg shadow-xl p-8 w-full max-w-md">
+        <!-- Logo/Header -->
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd"></path>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Admin Login</h1>
+            <p class="text-gray-600 mt-2">Enter your admin token to access the dashboard</p>
+        </div>
+
+        <!-- Error Message -->
+        ${errorMessage ? `
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                ${escapeHtml(errorMessage)}
+            </div>
+        </div>
+        ` : ''}
+
+        <!-- Login Form -->
+        <form method="POST" action="/admin/login" class="space-y-6">
+            <div>
+                <label for="token" class="block text-sm font-medium text-gray-700 mb-2">
+                    Admin Token
+                </label>
+                <input 
+                    type="password" 
+                    id="token" 
+                    name="token" 
+                    required
+                    class="input-focus w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Enter your admin token"
+                    data-testid="input-token"
+                />
+            </div>
+            
+            <button 
+                type="submit" 
+                class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200"
+                data-testid="button-login"
+            >
+                <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                Sign In to Admin Dashboard
+            </button>
+        </form>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center">
+            <p class="text-sm text-gray-500">
+                Research Profile Platform
+            </p>
+            <p class="text-xs text-gray-400 mt-2">
+                Secure admin access required for this interface
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-focus the token input
+        document.getElementById('token').focus();
+        
+        // Handle form submission with loading state
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const button = document.querySelector('button[type="submit"]');
+            const originalText = button.innerHTML;
+            
+            button.disabled = true;
+            button.innerHTML = \`
+                <svg class="w-5 h-5 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Signing in...
+            \`;
+            
+            // Reset button state after 10 seconds (in case of network issues)
+            setTimeout(() => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }, 10000);
+        });
+    </script>
+</body>
+</html>`;
 }
 
 // Static HTML template for exported researcher profiles
@@ -585,8 +746,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin login endpoint
+  app.post('/admin/login', adminRateLimit, async (req, res) => {
+    try {
+      const { token } = req.body;
+      const adminToken = process.env.ADMIN_API_TOKEN;
+      
+      if (!adminToken) {
+        console.error('ADMIN_API_TOKEN environment variable not set');
+        return res.status(500).send(generateLoginFormHTML('Admin authentication not configured'));
+      }
+
+      if (!token) {
+        return res.status(400).send(generateLoginFormHTML('Please enter your admin token'));
+      }
+
+      // Verify the token
+      if (token === adminToken) {
+        // Set admin session
+        (req.session as any).isAdmin = true;
+        console.log(`Admin login successful from ${req.ip}`);
+        
+        // Redirect to admin interface
+        return res.redirect('/admin');
+      } else {
+        console.warn(`Invalid admin login attempt from ${req.ip}`);
+        return res.status(401).send(generateLoginFormHTML('Invalid admin token'));
+      }
+    } catch (error) {
+      console.error('Error during admin login:', error);
+      res.status(500).send(generateLoginFormHTML('Login failed. Please try again.'));
+    }
+  });
+
+  // Admin logout endpoint
+  app.post('/admin/logout', (req, res) => {
+    console.log(`Admin logout from ${req.ip}`);
+    (req.session as any).isAdmin = false;
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Error destroying session:', err);
+      }
+      res.redirect('/admin');
+    });
+  });
+
   // Admin web interface (ADMIN ONLY)
-  app.get('/admin', adminRateLimit, adminAuthMiddleware, async (req, res) => {
+  app.get('/admin', adminRateLimit, adminSessionAuthMiddleware, async (req, res) => {
+    // Check if user is authenticated
+    if (!isAuthenticated(req)) {
+      // Show login form if not authenticated
+      return res.send(generateLoginFormHTML());
+    }
     try {
       // Get all public researcher profiles for the interface
       const profiles = await storage.getAllPublicResearcherProfiles();
@@ -607,9 +818,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">Research Profile Admin</h1>
-            <p class="text-gray-600">Manage researcher profiles and data synchronization</p>
+        <header class="mb-8 flex justify-between items-start">
+            <div>
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">Research Profile Admin</h1>
+                <p class="text-gray-600">Manage researcher profiles and data synchronization</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-sm text-gray-600 text-right">
+                    <div class="text-green-600 font-medium">✓ Authenticated</div>
+                    <div class="text-xs">Session active</div>
+                </div>
+                <form method="POST" action="/admin/logout" class="inline">
+                    <button 
+                        type="submit" 
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                        data-testid="button-logout"
+                        onclick="return confirm('Are you sure you want to logout?')"
+                    >
+                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"></path>
+                        </svg>
+                        Logout
+                    </button>
+                </form>
+            </div>
         </header>
 
         <!-- Status Messages -->
