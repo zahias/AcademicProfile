@@ -38,14 +38,7 @@ export default function Landing() {
               <span className="font-semibold text-xl text-primary">Research Profile Platform</span>
             </div>
             <div className="flex items-center">
-              <Button 
-                onClick={() => window.location.href = '/api/login'}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                data-testid="button-login"
-              >
-                Sign In
-              </Button>
-            </div>
+              </div>
           </div>
         </div>
       </nav>
@@ -54,22 +47,14 @@ export default function Landing() {
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Showcase Your Research Impact
+            Discover Research Impact
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Create beautiful, automatically-updated research profiles powered by OpenAlex API. 
-            Showcase your publications, impact metrics, and academic journey in one place.
+            Explore beautiful, automatically-updated research profiles powered by OpenAlex API. 
+            Discover publications, impact metrics, and academic journeys from researchers worldwide.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button 
-              size="lg"
-              onClick={() => window.location.href = '/api/login'}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              data-testid="button-get-started"
-            >
-              Get Started
-            </Button>
+          <div className="flex justify-center mb-12">
             <Button 
               size="lg" 
               variant="outline"
@@ -127,9 +112,9 @@ export default function Landing() {
                   <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <i className="fas fa-user-cog text-primary text-xl"></i>
                   </div>
-                  <h3 className="font-semibold mb-2">Easy Management</h3>
+                  <h3 className="font-semibold mb-2">Open Access</h3>
                   <p className="text-muted-foreground text-sm">
-                    Simple admin dashboard to manage your profile information and upload your CV
+                    Free and open access to comprehensive research profiles and academic data
                   </p>
                 </div>
               </CardContent>
@@ -233,25 +218,14 @@ export default function Landing() {
                 <p className="text-muted-foreground mb-4">
                   Be the first researcher to join our platform!
                 </p>
-                <Button 
-                  onClick={() => window.location.href = '/api/login'}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  data-testid="button-be-first-researcher"
-                >
-                  Create Your Profile
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  No researchers are currently showcased.
+                </p>
               </CardContent>
             </Card>
           )}
           
           <div className="text-center mt-12">
-            <Button 
-              onClick={() => window.location.href = '/api/login'}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              data-testid="button-join-researchers"
-            >
-              Join Our Research Community
-            </Button>
           </div>
         </div>
       </section>

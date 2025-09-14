@@ -129,20 +129,13 @@ export default function ResearcherPage() {
             <div className="flex items-center">
               <span className="font-semibold text-xl text-primary">Research Profile Platform</span>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center">
               <Button 
                 onClick={() => window.location.href = '/'}
                 variant="outline"
                 data-testid="button-home"
               >
-                Home
-              </Button>
-              <Button 
-                onClick={() => window.location.href = '/api/login'}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                data-testid="button-login"
-              >
-                Sign In
+                Back to Directory
               </Button>
             </div>
           </div>

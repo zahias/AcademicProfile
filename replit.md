@@ -51,6 +51,15 @@ Preferred communication style: Simple, everyday language.
 - **Shared**: Common schemas and types in `/shared` directory
 - **Build**: Separate build processes for client (Vite) and server (esbuild)
 
+# Environment Variables
+
+## Required Environment Variables
+- **DATABASE_URL**: PostgreSQL connection string for Neon database
+- **ADMIN_API_TOKEN**: Bearer token for admin endpoint authentication (high entropy random string)
+
+## Optional Environment Variables  
+- **NODE_ENV**: Set to 'production' for production deployment (enables stricter IP restrictions)
+
 # External Dependencies
 
 ## Core Services

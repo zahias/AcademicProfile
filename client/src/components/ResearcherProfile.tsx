@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Navigation from "./Navigation";
-import AdminDashboard from "./AdminDashboard";
 import StatsOverview from "./StatsOverview";
 import PublicationAnalytics from "./PublicationAnalytics";
 import ResearchTopics from "./ResearchTopics";
@@ -12,63 +10,45 @@ import { Check, GraduationCap, TrendingUp } from "lucide-react";
 import type { ResearcherProfile } from "@shared/schema";
 
 export default function ResearcherProfile() {
-  const [showAdminModal, setShowAdminModal] = useState(false);
   
   const { data: profile } = useQuery<ResearcherProfile | null>({
     queryKey: ["/api/researcher/profile"],
     retry: false,
   });
 
-  // If no profile exists, show setup form
+  // If no profile exists, show message (no setup available for public)
   if (!profile) {
     return (
       <div className="min-h-screen bg-background">
-        <Navigation onAdminClick={() => setShowAdminModal(true)} />
+        <Navigation />
         
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <h1 className="text-3xl font-bold mb-4">Welcome to Your Research Profile</h1>
+                <h1 className="text-3xl font-bold mb-4">No Profile Available</h1>
                 <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-                  To get started, we need to connect your profile to your OpenAlex researcher ID. 
-                  This will allow us to automatically sync your publications, citations, and research data.
+                  This researcher profile is not available or has not been configured yet.
                 </p>
                 
-                <div className="bg-muted rounded-lg p-6 mb-8">
-                  <h3 className="font-semibold mb-2">How to find your OpenAlex ID:</h3>
-                  <ol className="text-sm text-muted-foreground text-left list-decimal list-inside space-y-1">
-                    <li>Visit <a href="https://openalex.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenAlex.org</a></li>
-                    <li>Search for your name in the "Authors" section</li>
-                    <li>Click on your profile to view your OpenAlex ID (starts with "A")</li>
-                    <li>Copy the ID and paste it in the admin panel</li>
-                  </ol>
-                </div>
-                
                 <Button 
-                  onClick={() => setShowAdminModal(true)}
+                  onClick={() => window.location.href = '/'}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  data-testid="button-setup-profile"
+                  data-testid="button-back-home"
                 >
-                  Set Up Profile
+                  Back to Directory
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        <AdminDashboard 
-          isOpen={showAdminModal}
-          onClose={() => setShowAdminModal(false)}
-          profile={null}
-        />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation onAdminClick={() => setShowAdminModal(true)} />
+      <Navigation />
       
       {/* Enhanced Hero Section */}
       <section className="hero-banner min-h-[85vh] flex items-center">
@@ -232,11 +212,6 @@ export default function ResearcherProfile() {
         </div>
       </footer>
 
-      <AdminDashboard 
-        isOpen={showAdminModal}
-        onClose={() => setShowAdminModal(false)}
-        profile={profile}
-      />
     </div>
   );
 }
