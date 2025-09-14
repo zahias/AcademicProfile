@@ -1,0 +1,212 @@
+/**
+ * Admin CSS for Research Profile Theme
+ * 
+ * Styles for the WordPress admin interface
+ */
+
+/* Meta box styling */
+.research-profile-meta-box {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.research-profile-meta-box .form-table th {
+    width: 200px;
+    font-weight: 600;
+}
+
+.research-profile-meta-box .form-table td {
+    padding: 15px 10px 15px 0;
+}
+
+.research-profile-meta-box .form-table input[type="text"],
+.research-profile-meta-box .form-table input[type="url"],
+.research-profile-meta-box .form-table input[type="date"],
+.research-profile-meta-box .form-table textarea {
+    width: 100%;
+    max-width: 500px;
+}
+
+.research-profile-meta-box .form-table textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+/* OpenAlex sync button */
+#sync-openalex-data {
+    background: #2271b1;
+    color: #fff;
+    border-color: #2271b1;
+    margin-left: 10px;
+}
+
+#sync-openalex-data:hover {
+    background: #135e96;
+    border-color: #135e96;
+}
+
+#sync-openalex-data:disabled {
+    background: #ddd;
+    color: #999;
+    border-color: #ddd;
+    cursor: not-allowed;
+}
+
+/* Sync status indicator */
+.sync-status {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 5px;
+    font-size: 13px;
+}
+
+.sync-status.success {
+    color: #00a32a;
+}
+
+.sync-status.error {
+    color: #d63638;
+}
+
+.sync-status .dashicons {
+    margin-right: 5px;
+}
+
+/* Custom post type admin columns */
+.wp-admin .wp-list-table .column-researcher_name,
+.wp-admin .wp-list-table .column-openalex_id {
+    width: 15%;
+}
+
+.wp-admin .wp-list-table .column-affiliation {
+    width: 20%;
+}
+
+.wp-admin .wp-list-table .column-is_public {
+    width: 10%;
+    text-align: center;
+}
+
+/* Publication count badge */
+.publication-count-badge {
+    display: inline-block;
+    background: #2271b1;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 5px;
+}
+
+/* Help text styling */
+.research-profile-help {
+    background: #f0f6fc;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #2271b1;
+    padding: 12px;
+    margin: 15px 0;
+}
+
+.research-profile-help h4 {
+    margin: 0 0 8px 0;
+    color: #2271b1;
+}
+
+.research-profile-help p {
+    margin: 0;
+    color: #646970;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Loading spinner */
+.research-profile-loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #2271b1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 5px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive improvements */
+@media (max-width: 782px) {
+    .research-profile-meta-box .form-table th,
+    .research-profile-meta-box .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .research-profile-meta-box .form-table th {
+        border-bottom: none;
+    }
+}
+
+/* Settings page styling */
+.research-profile-settings {
+    max-width: 800px;
+}
+
+.research-profile-settings .form-table {
+    margin-top: 20px;
+}
+
+.research-profile-settings .submit {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #ccd0d4;
+}
+
+/* Dashboard widget styling */
+.research-profile-dashboard-widget {
+    padding: 12px;
+}
+
+.research-profile-dashboard-widget .widget-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.research-profile-dashboard-widget .stat-item {
+    text-align: center;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.research-profile-dashboard-widget .stat-number {
+    font-size: 24px;
+    font-weight: 600;
+    color: #2271b1;
+}
+
+.research-profile-dashboard-widget .stat-label {
+    font-size: 12px;
+    color: #646970;
+    margin-top: 2px;
+}
+
+/* Notice styling improvements */
+.notice.research-profile-notice {
+    border-left-color: #2271b1;
+}
+
+.notice.research-profile-notice.notice-error {
+    border-left-color: #d63638;
+}
+
+.notice.research-profile-notice.notice-success {
+    border-left-color: #00a32a;
+}
