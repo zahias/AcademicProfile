@@ -1018,20 +1018,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     </div>
 
     <script>
-        const adminToken = prompt("Enter admin token:");
-        if (!adminToken) {
-            alert("Admin token required!");
-            window.location.href = "/";
-        }
-
         let currentEditingProfile = null;
 
-        // API helper function
+        // API helper function - uses session authentication instead of Bearer token
         async function apiRequest(url, options = {}) {
             const defaultOptions = {
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': \`Bearer \${adminToken}\`
+                    'Content-Type': 'application/json'
                 }
             };
             
@@ -1042,7 +1035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             if (!response.ok) {
-                const error = await response.json();
+                const error = await response.json().catch(() => ({ message: 'Request failed' }));
                 throw new Error(error.message || 'API request failed');
             }
             
