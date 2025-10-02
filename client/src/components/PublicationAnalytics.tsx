@@ -24,6 +24,7 @@ import {
 
 interface PublicationAnalyticsProps {
   openalexId: string;
+  researcherData?: ResearcherData | null;
 }
 
 interface Publication {
@@ -63,13 +64,16 @@ const CHART_COLORS = [
   "#00bcd4",
 ];
 
-export default function PublicationAnalytics({ openalexId }: PublicationAnalyticsProps) {
+export default function PublicationAnalytics({ openalexId, researcherData: propResearcherData }: PublicationAnalyticsProps) {
   const [activeTab, setActiveTab] = useState("cumulative");
 
-  const { data: researcherData, isLoading } = useQuery<ResearcherData | null>({
+  const { data: fetchedData, isLoading } = useQuery<ResearcherData | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
+    enabled: !propResearcherData,
   });
+
+  const researcherData = propResearcherData || fetchedData;
 
   // Data processing and chart calculations
   const chartData = useMemo(() => {
@@ -312,11 +316,11 @@ export default function PublicationAnalytics({ openalexId }: PublicationAnalytic
           </p>
           <div className="flex justify-center space-x-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{chartData.totalPublications}</div>
+              <div className="text-2xl font-bold text-primary">{researcherData?.researcher?.works_count || chartData.totalPublications}</div>
               <div className="text-sm text-muted-foreground">Total Publications</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-accent">{chartData.totalCitations}</div>
+              <div className="text-2xl font-bold text-accent">{researcherData?.researcher?.cited_by_count || chartData.totalCitations}</div>
               <div className="text-sm text-muted-foreground">Total Citations</div>
             </div>
             <div className="text-center">

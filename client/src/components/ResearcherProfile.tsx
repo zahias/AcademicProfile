@@ -216,7 +216,7 @@ export default function ResearcherProfile() {
       </section>
 
       <StatsOverview openalexId={openalexId} />
-      <PublicationAnalytics openalexId={openalexId} />
+      <PublicationAnalytics openalexId={openalexId} researcherData={researcherData} />
       <ResearchTopics openalexId={openalexId} />
       <Publications openalexId={openalexId} />
 
