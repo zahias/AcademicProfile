@@ -10,9 +10,9 @@ export default function Navigation() {
           </div>
           <div className="hidden md:flex items-center space-x-8">
             <a href="#overview" className="text-muted-foreground hover:text-foreground transition-colors">Overview</a>
+            <a href="#analytics" className="text-muted-foreground hover:text-foreground transition-colors">Analytics</a>
             <a href="#research" className="text-muted-foreground hover:text-foreground transition-colors">Research</a>
             <a href="#publications" className="text-muted-foreground hover:text-foreground transition-colors">Publications</a>
-            <a href="#analytics" className="text-muted-foreground hover:text-foreground transition-colors">Analytics</a>
           </div>
           <div className="md:hidden">
             <button className="text-muted-foreground hover:text-foreground">
