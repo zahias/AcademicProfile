@@ -7,7 +7,6 @@ import ResearchTopics from "./ResearchTopics";
 import Publications from "./Publications";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, GraduationCap, TrendingUp, Wifi, WifiOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import type { ResearcherProfile } from "@shared/schema";
@@ -119,44 +118,6 @@ export default function ResearcherProfile() {
                   <p className="text-2xl sm:text-3xl mb-6 text-white/90 font-light tracking-wide" data-testid="text-title">
                     {profile.title || 'Research Professional'}
                   </p>
-                </div>
-                
-                {/* Enhanced Quick Stats Pills */}
-                <div className="flex flex-wrap justify-center lg:justify-start gap-4 mb-8">
-                  <div className="stats-pill px-6 py-3 rounded-full">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <Check className="w-4 h-4 text-yellow-300" /> 
-                      Verified Researcher
-                    </span>
-                  </div>
-                  <div className="stats-pill px-6 py-3 rounded-full">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <GraduationCap className="w-4 h-4 text-blue-300" />
-                      Academic Professional
-                    </span>
-                  </div>
-                  <div className="stats-pill px-6 py-3 rounded-full">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-green-300" />
-                      Active Researcher
-                    </span>
-                  </div>
-                  {/* Real-time Connection Status */}
-                  <div className={`stats-pill px-6 py-3 rounded-full ${isConnected ? 'bg-green-500/20 border-green-400/30' : 'bg-red-500/20 border-red-400/30'}`} data-testid="status-realtime-connection">
-                    <span className="text-sm font-medium flex items-center gap-2">
-                      {isConnected ? (
-                        <>
-                          <Wifi className="w-4 h-4 text-green-300" />
-                          Live Updates
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff className="w-4 h-4 text-red-300" />
-                          Connecting...
-                        </>
-                      )}
-                    </span>
-                  </div>
                 </div>
               </div>
               
