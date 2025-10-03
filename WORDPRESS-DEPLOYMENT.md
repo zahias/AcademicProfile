@@ -16,6 +16,8 @@ The WordPress deployment uses a **hybrid architecture**:
 1. **WordPress Theme** (`research-profile-platform.zip`) - Install on your WordPress site
 2. **Node.js Backend** (`wordpress-backend-package.tar.gz`) - Deploy separately on any Node.js hosting
 
+**Important**: Both packages are required. The WordPress theme contains only the frontend; the backend must be deployed separately.
+
 ## Prerequisites
 
 - WordPress site (any hosting: Bluehost, SiteGround, WP Engine, etc.)
@@ -68,22 +70,24 @@ If you're already on Replit:
 
 The backend needs to allow requests from your WordPress site.
 
-**Environment Variable:**
+**Environment Variable (REQUIRED):**
 ```
 ALLOWED_ORIGINS=https://yourwordpresssite.com,https://www.yourwordpresssite.com
 ```
+
+⚠️ **Security**: This variable MUST be set explicitly. If not set, no cross-origin requests will be allowed (secure by default).
 
 **Multiple WordPress sites:**
 ```
 ALLOWED_ORIGINS=https://site1.com,https://site2.com,https://site3.com
 ```
 
-**Allow all origins (development only):**
+**Development only (use with caution):**
 ```
 ALLOWED_ORIGINS=*
 ```
 
-⚠️ **Security**: Never use `*` in production. Always specify your WordPress domain(s).
+**Note**: Never use `*` in production. Always specify your exact WordPress domain(s).
 
 ## Part 2: Install WordPress Theme
 

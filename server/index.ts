@@ -9,6 +9,7 @@ const app = express();
 
 // CORS configuration for WordPress deployments
 // Allows requests from WordPress installations
+// IMPORTANT: ALLOWED_ORIGINS must be explicitly set for security
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : [];
@@ -16,10 +17,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // Allow requests from allowed origins or same origin
-  if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || allowedOrigins.includes('*'))) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
+  // Only allow requests from explicitly configured origins
+  // For security, no origins are allowed by default unless ALLOWED_ORIGINS is set
+  if (origin && allowedOrigins.length > 0) {
+    // Check if this specific origin is allowed, or if wildcard is set
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
   }
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
