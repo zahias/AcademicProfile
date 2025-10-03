@@ -50,7 +50,7 @@ This creates a `dist` folder with:
 Run the deployment packaging script:
 
 ```bash
-npm run package:deploy
+bash create-deployment-package.sh
 ```
 
 This creates `deployment-package.tar.gz` containing:
@@ -237,7 +237,7 @@ research-platform/
 
 ### Update Application:
 1. Build new version locally: `npm run build`
-2. Create new deployment package: `npm run package:deploy`
+2. Create new deployment package: `bash create-deployment-package.sh`
 3. Upload and extract to server
 4. Run npm install if dependencies changed
 5. Restart application in Node.js Selector

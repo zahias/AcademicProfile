@@ -51,6 +51,11 @@ const prodPkg = {
 require('fs').writeFileSync('$TEMP_DIR/package.json', JSON.stringify(prodPkg, null, 2));
 "
 
+# Copy package-lock.json for consistent dependency installation
+if [ -f "package-lock.json" ]; then
+  cp package-lock.json "$TEMP_DIR/"
+fi
+
 # Copy essential config files
 echo "📋 Copying configuration files..."
 
@@ -64,8 +69,11 @@ if [ -f "tsconfig.json" ]; then
   cp tsconfig.json "$TEMP_DIR/"
 fi
 
-# Create .npmrc to ensure production install
-echo "package-lock=false" > "$TEMP_DIR/.npmrc"
+# Create .npmrc for production install configuration
+cat > "$TEMP_DIR/.npmrc" << 'NPMRC'
+package-lock=true
+production=true
+NPMRC
 
 # Create README for the package
 cat > "$TEMP_DIR/README.txt" << 'EOF'
