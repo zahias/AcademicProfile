@@ -132,7 +132,7 @@ export default function ResearcherProfile() {
               {/* Enhanced Action Buttons */}
               <div className="flex flex-wrap justify-center lg:justify-start gap-4 pt-4">
                 <a 
-                  href={`https://openalex.org/people/${openalexId}`} 
+                  href={`https://openalex.org/authors/${openalexId}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="action-button group bg-white/15 backdrop-blur-sm text-white px-8 py-4 rounded-xl hover:bg-white/25 transition-all duration-300 border border-white/20 hover:border-white/40 hover:scale-105 font-medium"
@@ -155,7 +155,7 @@ export default function ResearcherProfile() {
                     <svg className="w-5 h-5 mr-3 inline text-red-600 group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                     </svg>
-                    Download CV
+                    Download CV/Resume
                   </a>
                 )}
                 <button className="action-button group bg-gradient-to-r from-accent/20 to-accent/10 backdrop-blur-sm text-white px-8 py-4 rounded-xl hover:from-accent/30 hover:to-accent/20 transition-all duration-300 border border-accent/20 hover:border-accent/40 font-medium">

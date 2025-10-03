@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -21,6 +22,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
 } from "recharts";
+import { TrendingUp, BarChart3, Award } from "lucide-react";
 
 interface PublicationAnalyticsProps {
   openalexId: string;
@@ -48,21 +50,21 @@ interface ResearcherData {
   lastSynced: string;
 }
 
-// Enhanced color palette for charts
+// Enhanced color palette - vibrant, non-black colors
 const CHART_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--accent))",
-  "#8b5cf6",
-  "#06b6d4",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#ec4899",
-  "#6366f1",
-  "#14b8a6",
+  "#3b82f6", // blue
+  "#8b5cf6", // purple
+  "#06b6d4", // cyan
+  "#10b981", // green
+  "#f59e0b", // amber
+  "#ef4444", // red
+  "#ec4899", // pink
+  "#14b8a6", // teal
 ];
 
 export default function PublicationAnalytics({ openalexId, researcherData: propResearcherData }: PublicationAnalyticsProps) {
+  const [activeTab, setActiveTab] = useState("growth");
+
   const { data: fetchedData, isLoading } = useQuery<ResearcherData | null>({
     queryKey: [`/api/researcher/${openalexId}/data`],
     retry: false,
@@ -78,13 +80,15 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
         cumulativeData: [],
         yearlyData: [],
         topicsData: [],
-        journalsData: [],
         typesData: [],
         citationData: [],
         totalPublications: 0,
         totalCitations: 0,
         avgCitations: 0,
         yearRange: { start: 0, end: 0 },
+        mostProductiveYear: { year: 0, count: 0 },
+        highestCitationYear: { year: 0, count: 0 },
+        researchAreasCount: 0,
       };
     }
 
@@ -133,27 +137,27 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
       }
     }
 
-    // Process topics data - get top research topics
-    const topicCounts: { [topic: string]: number } = {};
+    // Find most productive year
+    const mostProductiveYear = yearlyData.reduce((max, curr) => 
+      curr.publications > max.count ? { year: curr.year, count: curr.publications } : max
+    , { year: 0, count: 0 });
+
+    // Find highest citation year
+    const highestCitationYear = yearlyData.reduce((max, curr) => 
+      curr.citations > max.count ? { year: curr.year, count: curr.citations } : max
+    , { year: 0, count: 0 });
+
+    // Count unique research topics
+    const topicSet = new Set<string>();
     publications.forEach(pub => {
       if (pub.topics && Array.isArray(pub.topics)) {
         pub.topics.forEach(topic => {
           if (typeof topic === 'string') {
-            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+            topicSet.add(topic);
           }
         });
       }
     });
-
-    const topicsData = Object.entries(topicCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
-      .map(([topic, count]) => ({
-        topic: topic.length > 25 ? topic.substring(0, 25) + "..." : topic,
-        fullTopic: topic,
-        count,
-        percentage: ((count / publications.length) * 100).toFixed(1),
-      }));
 
     // Process publication types
     const typeCounts = {
@@ -184,7 +188,7 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
         percentage: ((count / publications.length) * 100).toFixed(1),
       }));
 
-    // Citation impact data - combine publications and citations
+    // Citation impact data
     const citationData = yearlyData.map(d => ({
       year: d.year,
       publications: d.publications,
@@ -194,14 +198,16 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
     return {
       cumulativeData,
       yearlyData,
-      topicsData,
-      journalsData: [],
+      topicsData: [],
       typesData,
       citationData,
       totalPublications: publications.length,
       totalCitations,
       avgCitations: totalCitations / publications.length,
       yearRange: { start: startYear, end: endYear },
+      mostProductiveYear,
+      highestCitationYear,
+      researchAreasCount: topicSet.size,
     };
   }, [researcherData]);
 
@@ -271,151 +277,226 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
     return null;
   };
 
-  const CustomPieTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-          <p className="font-medium">{data.type || data.topic}</p>
-          <p className="text-sm">Count: {data.count}</p>
-          <p className="text-sm">Percentage: {data.percentage}%</p>
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <section id="analytics" className="py-16" data-testid="section-analytics">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header with summary stats */}
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold mb-4">Publication Analytics</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-8">
             Comprehensive insights into research output and impact patterns over time.
           </p>
-          <div className="flex justify-center space-x-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{researcherData?.researcher?.works_count || chartData.totalPublications}</div>
-              <div className="text-sm text-muted-foreground">Total Publications</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-accent">{researcherData?.researcher?.cited_by_count || chartData.totalCitations}</div>
-              <div className="text-sm text-muted-foreground">Total Citations</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary">{chartData.avgCitations.toFixed(1)}</div>
-              <div className="text-sm text-muted-foreground">Avg Citations/Paper</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-accent">
-                {chartData.yearRange.end - chartData.yearRange.start + 1}
-              </div>
-              <div className="text-sm text-muted-foreground">Active Years</div>
-            </div>
+          
+          {/* Key Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 max-w-6xl mx-auto">
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-primary mb-2">
+                  {chartData.mostProductiveYear.count}
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">Most Productive Year</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {chartData.mostProductiveYear.year || 'N/A'}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-accent">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-accent mb-2">
+                  {chartData.highestCitationYear.count}
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">Highest Citation Year</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {chartData.highestCitationYear.year || 'N/A'}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-primary mb-2">
+                  {chartData.researchAreasCount}
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">Research Areas</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Distinct topics
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-accent">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-accent mb-2">
+                  {chartData.avgCitations.toFixed(1)}
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">Avg Citations/Paper</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Per publication
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-primary mb-2">
+                  {chartData.yearRange.end - chartData.yearRange.start + 1}
+                </div>
+                <div className="text-sm text-muted-foreground font-medium">Active Years</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {chartData.yearRange.start} - {chartData.yearRange.end}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        {/* Main Analytics Grid */}
-        <div className="space-y-8">
-          {/* Growth Section - Full Width */}
-          <Card data-testid="card-growth-section" className="overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5">
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">📈</span>
-                Publication Growth Over Time
-                <Badge variant="secondary" className="ml-auto">
-                  {chartData.yearRange.start} - {chartData.yearRange.end}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <ResponsiveContainer width="100%" height={350}>
-                <AreaChart data={chartData.cumulativeData}>
-                  <defs>
-                    <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="year" />
-                  <YAxis />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="cumulative"
-                    name="Cumulative Publications"
-                    stroke="hsl(var(--primary))"
-                    fill="url(#colorCumulative)"
-                    strokeWidth={3}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        {/* Chart Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-3" data-testid="tabs-analytics">
+            <TabsTrigger value="growth" data-testid="tab-growth">
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Growth
+            </TabsTrigger>
+            <TabsTrigger value="types" data-testid="tab-types">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Types
+            </TabsTrigger>
+            <TabsTrigger value="impact" data-testid="tab-impact">
+              <Award className="w-4 h-4 mr-2" />
+              Impact
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Two Column Grid: Types and Impact */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Types Section */}
-            <Card data-testid="card-types-section" className="overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-accent/5 to-primary/5">
+          {/* Growth Tab */}
+          <TabsContent value="growth" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card data-testid="card-cumulative-chart">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-primary" />
+                    Cumulative Publications
+                    <Badge variant="secondary" className="ml-auto">
+                      {chartData.yearRange.start} - {chartData.yearRange.end}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={chartData.cumulativeData}>
+                      <defs>
+                        <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="year" />
+                      <YAxis />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="cumulative"
+                        name="Total Publications"
+                        stroke="hsl(var(--primary))"
+                        fill="url(#colorCumulative)"
+                        strokeWidth={3}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-yearly-chart">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-accent" />
+                    Publications by Year
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={chartData.yearlyData}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis dataKey="year" />
+                      <YAxis />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="publications" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Types Tab */}
+          <TabsContent value="types">
+            <Card data-testid="card-types-chart">
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">📋</span>
-                  Publication Types
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Publication Types Distribution
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie
-                        data={chartData.typesData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={70}
-                        outerRadius={110}
-                        paddingAngle={2}
-                        dataKey="count"
-                        label={({ percentage }) => `${percentage}%`}
-                      >
+              <CardContent>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Bar Chart instead of Pie */}
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={chartData.typesData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="type" width={150} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                         {chartData.typesData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                         ))}
-                      </Pie>
-                      <Tooltip content={<CustomPieTooltip />} />
-                    </PieChart>
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
-                  <div className="w-full space-y-2 mt-4">
+                  
+                  {/* Legend with Colors */}
+                  <div className="space-y-3 flex flex-col justify-center">
                     {chartData.typesData.map((item, index) => (
-                      <div key={item.type} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-2">
+                      <div key={item.type} className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border">
+                        <div className="flex items-center gap-3">
                           <div
-                            className="w-3 h-3 rounded-full"
+                            className="w-4 h-4 rounded-sm"
                             style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                           />
-                          <span className="text-sm font-medium">{item.type}</span>
+                          <span className="font-medium">{item.type}</span>
                         </div>
-                        <div className="text-sm font-bold">{item.count}</div>
+                        <div className="text-right">
+                          <div className="font-bold text-lg">{item.count}</div>
+                          <div className="text-sm text-muted-foreground">{item.percentage}%</div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {/* Impact Section */}
-            <Card data-testid="card-impact-section" className="overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5">
+          {/* Impact Tab */}
+          <TabsContent value="impact">
+            <Card data-testid="card-impact-chart">
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">🏆</span>
-                  Citation Impact
+                  <Award className="w-5 h-5 text-accent" />
+                  Citation Impact Over Time
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <ResponsiveContainer width="100%" height={350}>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
                   <ComposedChart data={chartData.citationData}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                    <defs>
+                      <linearGradient id="colorCitations" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
                     <XAxis dataKey="year" />
                     <YAxis yAxisId="left" />
                     <YAxis yAxisId="right" orientation="right" />
@@ -425,110 +506,25 @@ export default function PublicationAnalytics({ openalexId, researcherData: propR
                       yAxisId="left" 
                       dataKey="publications" 
                       fill="hsl(var(--primary))" 
-                      opacity={0.6}
+                      opacity={0.5}
                       radius={[4, 4, 0, 0]}
                       name="Publications"
                     />
-                    <Line
+                    <Area
                       yAxisId="right"
                       type="monotone"
                       dataKey="citations"
                       stroke="hsl(var(--accent))"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: "hsl(var(--accent))" }}
+                      fill="url(#colorCitations)"
+                      strokeWidth={2}
                       name="Citations"
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Topics Section - Full Width */}
-          <Card data-testid="card-topics-section" className="overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-accent/5 to-primary/5">
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">🔬</span>
-                Top Research Topics
-                <Badge variant="secondary" className="ml-2">
-                  Top {chartData.topicsData.length} Areas
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart
-                  data={chartData.topicsData}
-                  layout="vertical"
-                  margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="topic" width={140} />
-                  <Tooltip
-                    content={({ active, payload }: any) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        return (
-                          <div className="bg-background border border-border rounded-lg p-3 shadow-lg max-w-xs">
-                            <p className="font-medium mb-1">{data.fullTopic}</p>
-                            <p className="text-sm">Publications: {data.count}</p>
-                            <p className="text-sm">Coverage: {data.percentage}%</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                    {chartData.topicsData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Additional Insights Cards */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="border-l-4 border-l-primary">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-primary mb-2">
-                {Math.max(...chartData.yearlyData.map(d => d.publications), 0)}
-              </div>
-              <div className="text-muted-foreground text-sm font-medium">Most Productive Year</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {chartData.yearlyData.find(d => d.publications === Math.max(...chartData.yearlyData.map(d => d.publications)))?.year || 'N/A'}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-accent">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-accent mb-2">
-                {Math.max(...chartData.citationData.map(d => d.citations), 0)}
-              </div>
-              <div className="text-muted-foreground text-sm font-medium">Highest Citation Year</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {chartData.citationData.find(d => d.citations === Math.max(...chartData.citationData.map(d => d.citations)))?.year || 'N/A'}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-primary">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-primary mb-2">
-                {chartData.topicsData.length}
-              </div>
-              <div className="text-muted-foreground text-sm font-medium">Research Areas</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Distinct topic areas
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </section>
   );

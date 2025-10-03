@@ -11,7 +11,7 @@ export default function Navigation() {
           <div className="hidden md:flex items-center space-x-8">
             <a href="#overview" className="text-muted-foreground hover:text-foreground transition-colors">Overview</a>
             <a href="#analytics" className="text-muted-foreground hover:text-foreground transition-colors">Analytics</a>
-            <a href="#research" className="text-muted-foreground hover:text-foreground transition-colors">Research</a>
+            <a href="#research" className="text-muted-foreground hover:text-foreground transition-colors">Research Areas</a>
             <a href="#publications" className="text-muted-foreground hover:text-foreground transition-colors">Publications</a>
           </div>
           <div className="md:hidden">
