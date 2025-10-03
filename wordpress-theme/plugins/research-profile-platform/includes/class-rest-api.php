@@ -36,37 +36,146 @@ class RPP_REST_API {
             'permission_callback' => '__return_true'
         ));
         
+        // Export researcher profile as static HTML (public)
+        register_rest_route($this->namespace, '/researcher/(?P<openalex_id>[A-Za-z0-9]+)/export', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'export_profile'),
+            'permission_callback' => '__return_true'
+        ));
+        
         // Admin routes
         register_rest_route($this->namespace, '/admin/researcher/profile', array(
             'methods' => 'POST',
             'callback' => array($this, 'create_profile'),
-            'permission_callback' => array($this, 'check_admin_permission')
+            'permission_callback' => array($this, 'check_admin_permission_with_logging')
         ));
         
         register_rest_route($this->namespace, '/admin/researcher/profile/(?P<openalex_id>[A-Za-z0-9]+)', array(
             'methods' => 'PUT',
             'callback' => array($this, 'update_profile'),
-            'permission_callback' => array($this, 'check_admin_permission')
+            'permission_callback' => array($this, 'check_admin_permission_with_logging')
         ));
         
         register_rest_route($this->namespace, '/admin/researcher/(?P<openalex_id>[A-Za-z0-9]+)/sync', array(
             'methods' => 'POST',
             'callback' => array($this, 'sync_researcher'),
-            'permission_callback' => array($this, 'check_admin_permission')
+            'permission_callback' => array($this, 'check_admin_permission_with_logging')
         ));
         
         register_rest_route($this->namespace, '/admin/researcher/(?P<openalex_id>[A-Za-z0-9]+)/upload-cv', array(
             'methods' => 'POST',
             'callback' => array($this, 'upload_cv'),
-            'permission_callback' => array($this, 'check_admin_permission')
+            'permission_callback' => array($this, 'check_admin_permission_with_logging')
         ));
     }
     
     /**
-     * Check if user has admin permission
+     * Check if user has admin permission (basic)
      */
     public function check_admin_permission() {
         return current_user_can('manage_options');
+    }
+    
+    /**
+     * Check admin permission with security logging and rate limiting
+     */
+    public function check_admin_permission_with_logging($request) {
+        $user = wp_get_current_user();
+        $ip = $this->get_client_ip();
+        
+        // Check rate limiting
+        if (!$this->check_rate_limit($ip)) {
+            $this->audit_log('RATE_LIMIT_EXCEEDED', $user->ID, $ip, $request->get_route());
+            return new WP_Error(
+                'rate_limit',
+                'Rate limit exceeded for admin operations',
+                array('status' => 429)
+            );
+        }
+        
+        // Check permission
+        if (!current_user_can('manage_options')) {
+            $this->audit_log('UNAUTHORIZED_ACCESS', $user->ID, $ip, $request->get_route());
+            return false;
+        }
+        
+        // Log successful admin access
+        $this->audit_log('ADMIN_ACCESS', $user->ID, $ip, $request->get_route());
+        return true;
+    }
+    
+    /**
+     * Get client IP address
+     */
+    private function get_client_ip() {
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ip = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0];
+        } elseif (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+            $ip = $_SERVER['HTTP_X_REAL_IP'];
+        }
+        return $ip;
+    }
+    
+    /**
+     * Rate limiting check (15 min window, 100 requests max)
+     */
+    private function check_rate_limit($ip) {
+        $transient_key = 'rpp_rate_limit_' . md5($ip);
+        $data = get_transient($transient_key);
+        
+        if (!$data) {
+            set_transient($transient_key, array('count' => 1, 'time' => time()), 15 * MINUTE_IN_SECONDS);
+            return true;
+        }
+        
+        if ($data['count'] >= 100) {
+            return false;
+        }
+        
+        $data['count']++;
+        set_transient($transient_key, $data, 15 * MINUTE_IN_SECONDS);
+        return true;
+    }
+    
+    /**
+     * Audit logging for security events
+     */
+    private function audit_log($action, $user_id, $ip, $details = '') {
+        global $wpdb;
+        $table = $wpdb->prefix . 'rpp_audit_log';
+        
+        // Create audit log table if doesn't exist
+        $wpdb->query("CREATE TABLE IF NOT EXISTS $table (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            action varchar(50) NOT NULL,
+            user_id bigint(20) unsigned,
+            ip_address varchar(100),
+            details text,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY action (action),
+            KEY user_id (user_id),
+            KEY created_at (created_at)
+        ) " . $wpdb->get_charset_collate());
+        
+        // Insert log entry
+        $wpdb->insert($table, array(
+            'action' => $action,
+            'user_id' => $user_id,
+            'ip_address' => $ip,
+            'details' => $details,
+            'created_at' => current_time('mysql')
+        ));
+        
+        // Also log to error_log for immediate visibility
+        error_log(sprintf(
+            'RPP Audit: %s | User: %d | IP: %s | Details: %s',
+            $action,
+            $user_id,
+            $ip,
+            $details
+        ));
     }
     
     /**
@@ -116,6 +225,159 @@ class RPP_REST_API {
         }
         
         return rest_ensure_response($data);
+    }
+    
+    /**
+     * Export researcher profile as static HTML
+     */
+    public function export_profile($request) {
+        $openalex_id = $request['openalex_id'];
+        
+        // Get profile (must be public)
+        $profile = RPP_Database::get_profile_by_openalex_id($openalex_id);
+        if (!$profile || !$profile['is_public']) {
+            return new WP_Error('not_found', 'Researcher not found or not public', array('status' => 404));
+        }
+        
+        // Get all data
+        $cached_data = RPP_Database::get_cached_data($openalex_id, 'researcher');
+        $researcher_data = $cached_data ? $cached_data['data'] : null;
+        $topics = RPP_Database::get_topics($openalex_id);
+        $publications = RPP_Database::get_publications($openalex_id, 100);
+        $affiliations = RPP_Database::get_affiliations($openalex_id);
+        
+        // Generate static HTML
+        $html = $this->generate_static_html(array(
+            'profile' => $profile,
+            'researcher' => $researcher_data,
+            'topics' => $topics,
+            'publications' => $publications,
+            'affiliations' => $affiliations,
+            'exportedAt' => current_time('c'),
+            'exportUrl' => home_url('/researcher/' . $openalex_id)
+        ));
+        
+        // Return as downloadable HTML file
+        $filename = sanitize_file_name(($profile['display_name'] ?: 'researcher') . '-profile.html');
+        
+        // Use WP_REST_Response to set headers
+        $response = new WP_REST_Response($html);
+        $response->set_headers(array(
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"'
+        ));
+        
+        return $response;
+    }
+    
+    /**
+     * Generate static HTML for researcher profile export
+     */
+    private function generate_static_html($data) {
+        $profile = $data['profile'];
+        $researcher = $data['researcher'];
+        $topics = $data['topics'];
+        $publications = $data['publications'];
+        $affiliations = $data['affiliations'];
+        $exported_at = $data['exportedAt'];
+        $export_url = $data['exportUrl'];
+        
+        $display_name = esc_html($profile['display_name'] ?: 'Researcher Profile');
+        $title = esc_html($profile['title'] ?: '');
+        $bio = esc_html($profile['bio'] ?: '');
+        $affiliation = esc_html($profile['current_affiliation'] ?: '');
+        $pub_count = count($publications);
+        $citations = isset($researcher['cited_by_count']) ? number_format($researcher['cited_by_count']) : '0';
+        $h_index = isset($researcher['summary_stats']['h_index']) ? $researcher['summary_stats']['h_index'] : 'N/A';
+        
+        ob_start();
+        ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo $display_name; ?> - Academic Profile</title>
+    <meta name="description" content="<?php echo $bio; ?>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+    <!-- Header -->
+    <header class="gradient-bg text-white py-20">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center">
+                <h1 class="text-5xl font-bold mb-4"><?php echo $display_name; ?></h1>
+                <?php if ($title): ?>
+                    <p class="text-xl mb-4"><?php echo $title; ?></p>
+                <?php endif; ?>
+                <?php if ($affiliation): ?>
+                    <p class="text-lg"><?php echo $affiliation; ?></p>
+                <?php endif; ?>
+                <?php if ($bio): ?>
+                    <p class="mt-6 max-w-3xl mx-auto"><?php echo $bio; ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </header>
+
+    <!-- Stats -->
+    <section class="py-16 -mt-10 relative z-10">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-lg shadow-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-blue-600"><?php echo $pub_count; ?></div>
+                    <div class="text-gray-600">Publications</div>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-purple-600"><?php echo $citations; ?></div>
+                    <div class="text-gray-600">Citations</div>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6 text-center">
+                    <div class="text-3xl font-bold text-green-600"><?php echo $h_index; ?></div>
+                    <div class="text-gray-600">h-index</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Publications -->
+    <?php if (!empty($publications)): ?>
+    <section class="py-16 bg-white">
+        <div class="max-w-6xl mx-auto px-6">
+            <h2 class="text-3xl font-bold mb-8">Recent Publications</h2>
+            <div class="space-y-4">
+                <?php foreach (array_slice($publications, 0, 20) as $pub): ?>
+                <div class="border-l-4 border-blue-500 pl-4">
+                    <h3 class="font-semibold text-lg"><?php echo esc_html($pub['title']); ?></h3>
+                    <?php if ($pub['author_names']): ?>
+                        <p class="text-sm text-gray-600"><?php echo esc_html($pub['author_names']); ?></p>
+                    <?php endif; ?>
+                    <p class="text-sm text-gray-500">
+                        <?php echo $pub['journal'] ? esc_html($pub['journal']) . ' · ' : ''; ?>
+                        <?php echo $pub['publication_year']; ?> ·
+                        <?php echo number_format($pub['citation_count']); ?> citations
+                    </p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- Footer -->
+    <footer class="bg-gray-100 py-8 text-center text-gray-600 no-print">
+        <p>Exported from <a href="<?php echo esc_url($export_url); ?>" class="text-blue-600"><?php echo esc_url($export_url); ?></a></p>
+        <p class="text-sm mt-2">Generated on <?php echo date('F j, Y', strtotime($exported_at)); ?></p>
+    </footer>
+</body>
+</html>
+        <?php
+        return ob_get_clean();
     }
     
     /**

@@ -108,14 +108,28 @@ class RPP_OpenAlex_API {
             }
         }
         
-        // 2. Get and cache works (publications)
-        $works_data = $this->get_works($openalex_id, 1, 100);
-        if ($works_data && isset($works_data['results'])) {
-            RPP_Database::cache_data($openalex_id, 'works', $works_data);
-            $results['works_cached'] = 'success';
+        // 2. Get and cache works (publications) - fetch ALL publications with pagination
+        $all_publications = array();
+        $page = 1;
+        $per_page = 50;
+        $total_fetched = 0;
+        $max_publications = 10000; // Safety limit to prevent infinite loops (very high)
+        
+        do {
+            $works_data = $this->get_works($openalex_id, $page, $per_page);
             
-            // Process and save publications
-            $publications = array();
+            if (!$works_data || !isset($works_data['results']) || empty($works_data['results'])) {
+                // No more results
+                break;
+            }
+            
+            // Cache first page for quick access
+            if ($page === 1) {
+                RPP_Database::cache_data($openalex_id, 'works', $works_data);
+                $results['works_cached'] = 'success';
+            }
+            
+            // Process publications
             foreach ($works_data['results'] as $work) {
                 // Extract author names
                 $author_names = array();
@@ -137,7 +151,7 @@ class RPP_OpenAlex_API {
                     }
                 }
                 
-                $publications[] = array(
+                $all_publications[] = array(
                     'work_id' => isset($work['id']) ? $work['id'] : '',
                     'title' => isset($work['title']) ? $work['title'] : 'Untitled',
                     'author_names' => implode(', ', $author_names),
@@ -148,9 +162,42 @@ class RPP_OpenAlex_API {
                     'doi' => isset($work['doi']) ? str_replace('https://doi.org/', '', $work['doi']) : null,
                     'is_open_access' => isset($work['open_access']['is_oa']) ? $work['open_access']['is_oa'] : false
                 );
+                
+                $total_fetched++;
             }
-            RPP_Database::save_publications($openalex_id, $publications);
-            $results['publications'] = count($publications);
+            
+            // Safety check to prevent runaway loops
+            if ($total_fetched >= $max_publications) {
+                error_log("RPP: Reached safety limit of $max_publications publications for $openalex_id");
+                break;
+            }
+            
+            // Check if there are more results based on OpenAlex metadata
+            $has_more = false;
+            if (isset($works_data['meta']['count']) && $total_fetched < $works_data['meta']['count']) {
+                $has_more = true;
+            } elseif (isset($works_data['meta']['next_cursor']) && !empty($works_data['meta']['next_cursor'])) {
+                $has_more = true;
+            } elseif (count($works_data['results']) === $per_page) {
+                // Got a full page, probably more results
+                $has_more = true;
+            }
+            
+            if (!$has_more) {
+                // No more results to fetch
+                break;
+            }
+            
+            $page++;
+            
+            // Be nice to the OpenAlex API - delay between requests
+            usleep(250000); // 250ms (0.25 second) delay
+            
+        } while (true);
+        
+        if (!empty($all_publications)) {
+            RPP_Database::save_publications($openalex_id, $all_publications);
+            $results['publications'] = count($all_publications);
         }
         
         // 3. Extract and save affiliations
