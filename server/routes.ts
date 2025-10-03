@@ -5,6 +5,9 @@ import { storage } from "./storage";
 import { OpenAlexService } from "./services/openalexApi";
 import { insertResearcherProfileSchema, updateResearcherProfileSchema, type ResearchTopic, type Publication, type Affiliation } from "@shared/schema";
 import { z } from "zod";
+import multer from "multer";
+import { Storage } from "@google-cloud/storage";
+import path from "path";
 
 // Event emitter for real-time updates
 const updateEmitter = new EventEmitter();
@@ -791,6 +794,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Configure multer for file upload
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (_req, file, cb) => {
+      // Only allow PDF files
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+      } else {
+        cb(new Error('Only PDF files are allowed'));
+      }
+    },
+  });
+
+  // CV/Resume upload endpoint (ADMIN ONLY)
+  app.post('/api/admin/researcher/:openalexId/upload-cv', adminRateLimit, adminSessionAuthMiddleware, upload.single('cv'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      const { openalexId } = req.params;
+      const profile = await storage.getResearcherProfileByOpenalexId(openalexId);
+      
+      if (!profile) {
+        return res.status(404).json({ message: 'Researcher profile not found' });
+      }
+
+      // Initialize Google Cloud Storage client
+      const gcs = new Storage();
+      const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+      
+      if (!bucketId) {
+        return res.status(500).json({ message: 'Object storage not configured' });
+      }
+
+      const bucket = gcs.bucket(bucketId);
+      
+      // Generate unique filename
+      const filename = `cv/${openalexId}-cv-${Date.now()}.pdf`;
+      const file = bucket.file(filename);
+
+      // Upload file to GCS
+      await file.save(req.file.buffer, {
+        metadata: {
+          contentType: 'application/pdf',
+          metadata: {
+            openalexId: openalexId,
+            uploadedAt: new Date().toISOString(),
+          },
+        },
+        public: true, // Make file publicly accessible
+      });
+
+      // Get public URL
+      const cvUrl = `https://storage.googleapis.com/${bucketId}/${filename}`;
+
+      // Update profile with CV URL
+      await storage.updateResearcherProfile(profile.id, {
+        cvUrl: cvUrl,
+      });
+
+      // Broadcast update to connected clients
+      broadcastResearcherUpdate(openalexId, 'profile');
+
+      res.json({ 
+        message: 'CV uploaded successfully',
+        cvUrl: cvUrl,
+      });
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : 'Failed to upload CV',
+      });
+    }
+  });
+
   // Admin web interface (ADMIN ONLY)
   app.get('/admin', adminRateLimit, adminSessionAuthMiddleware, async (req, res) => {
     // Check if user is authenticated
@@ -969,10 +1051,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
                                 </div>
                                 
                                 <div>
-                                    <label for="cvUrl" class="block text-sm font-medium text-gray-700 mb-2">CV URL</label>
-                                    <input type="url" id="cvUrl" name="cvUrl" 
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                           placeholder="https://example.com/cv.pdf">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">CV/Resume</label>
+                                    <div class="space-y-2">
+                                        <input type="file" id="cvFile" name="cvFile" accept=".pdf"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                               onchange="handleCVUpload(this)">
+                                        <p class="text-xs text-gray-500">Upload PDF file (max 10MB) or enter URL below</p>
+                                        <input type="url" id="cvUrl" name="cvUrl" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               placeholder="Or enter CV URL: https://example.com/cv.pdf">
+                                        <div id="cvUploadStatus" class="text-sm hidden"></div>
+                                    </div>
                                 </div>
                                 
                                 <div>
@@ -1052,6 +1141,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
             container.classList.remove('hidden');
             
             setTimeout(() => container.classList.add('hidden'), 5000);
+        }
+
+        // Handle CV file upload
+        async function handleCVUpload(input) {
+            const statusEl = document.getElementById('cvUploadStatus');
+            const cvUrlInput = document.getElementById('cvUrl');
+            
+            if (!input.files || input.files.length === 0) {
+                return;
+            }
+            
+            const file = input.files[0];
+            
+            // Validate file size (10MB max)
+            if (file.size > 10 * 1024 * 1024) {
+                statusEl.textContent = 'File too large. Maximum size is 10MB.';
+                statusEl.className = 'text-sm text-red-600';
+                statusEl.classList.remove('hidden');
+                input.value = '';
+                return;
+            }
+            
+            // Validate file type
+            if (file.type !== 'application/pdf') {
+                statusEl.textContent = 'Only PDF files are allowed.';
+                statusEl.className = 'text-sm text-red-600';
+                statusEl.classList.remove('hidden');
+                input.value = '';
+                return;
+            }
+            
+            const openalexId = document.getElementById('openalexId').value;
+            if (!openalexId) {
+                statusEl.textContent = 'Please enter OpenAlex ID first before uploading CV.';
+                statusEl.className = 'text-sm text-red-600';
+                statusEl.classList.remove('hidden');
+                input.value = '';
+                return;
+            }
+            
+            statusEl.textContent = 'Uploading CV...';
+            statusEl.className = 'text-sm text-blue-600';
+            statusEl.classList.remove('hidden');
+            
+            try {
+                const formData = new FormData();
+                formData.append('cv', file);
+                
+                const response = await fetch(\`/api/admin/researcher/\${openalexId}/upload-cv\`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+                    throw new Error(error.message || 'Upload failed');
+                }
+                
+                const result = await response.json();
+                
+                // Update CV URL input with the uploaded file URL
+                cvUrlInput.value = result.cvUrl;
+                
+                statusEl.textContent = 'CV uploaded successfully!';
+                statusEl.className = 'text-sm text-green-600';
+                
+                setTimeout(() => statusEl.classList.add('hidden'), 3000);
+            } catch (error) {
+                statusEl.textContent = \`Upload failed: \${error.message}\`;
+                statusEl.className = 'text-sm text-red-600';
+                input.value = '';
+            }
         }
 
         // Show create form
