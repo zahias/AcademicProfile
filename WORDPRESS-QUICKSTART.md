@@ -155,26 +155,6 @@ ALLOWED_ORIGINS=https://your-wordpress-site.com
 - Set in **Settings > Research Profile**
 - Backend API URL: Your backend URL from Part 1
 
-## Converting .tar.gz to .zip (if needed)
-
-Some WordPress installations prefer `.zip` files. To convert:
-
-**On Mac/Linux:**
-```bash
-mkdir temp
-cd temp
-tar -xzf ../research-profile-platform.tar.gz
-zip -r ../research-profile-platform.zip .
-cd ..
-rm -rf temp
-```
-
-**On Windows:**
-1. Extract `research-profile-platform.tar.gz` (use 7-Zip)
-2. Select all files
-3. Right-click > Send to > Compressed (zipped) folder
-4. Rename to `research-profile-platform.zip`
-
 ## Deployment Architecture
 
 ```
