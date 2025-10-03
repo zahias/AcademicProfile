@@ -30,48 +30,44 @@ function research_profile_enqueue_scripts() {
     $theme_dir = get_template_directory_uri();
     $build_dir = $theme_dir . '/build';
     
-    // Get the manifest file to load correct hashed filenames
-    $manifest_path = get_template_directory() . '/build/.vite/manifest.json';
+    // Parse the index.html to extract asset filenames
+    $index_html_path = get_template_directory() . '/build/index.html';
     
-    if (file_exists($manifest_path)) {
-        $manifest = json_decode(file_get_contents($manifest_path), true);
+    if (file_exists($index_html_path)) {
+        $html_content = file_get_contents($index_html_path);
         
-        // Enqueue main CSS
-        if (isset($manifest['index.html']['css'])) {
-            foreach ($manifest['index.html']['css'] as $index => $css_file) {
-                wp_enqueue_style(
-                    'research-profile-css-' . $index,
-                    $build_dir . '/' . $css_file,
-                    array(),
-                    null
-                );
-            }
+        // Extract CSS file
+        if (preg_match('/<link rel="stylesheet"[^>]*href="([^"]+)"/', $html_content, $css_match)) {
+            $css_file = $css_match[1];
+            wp_enqueue_style(
+                'research-profile-css',
+                $build_dir . $css_file,
+                array(),
+                null
+            );
         }
         
-        // Enqueue main JavaScript
-        if (isset($manifest['index.html']['file'])) {
+        // Extract JS file
+        if (preg_match('/<script[^>]*src="([^"]+)"[^>]*><\/script>/', $html_content, $js_match)) {
+            $js_file = $js_match[1];
             wp_enqueue_script(
                 'research-profile-main',
-                $build_dir . '/' . $manifest['index.html']['file'],
+                $build_dir . $js_file,
                 array(),
                 null,
                 true
             );
+            
+            // Pass configuration to the React app
+            $api_url = get_option('research_profile_api_url', 'http://localhost:5000');
+            
+            wp_localize_script('research-profile-main', 'ResearchProfileConfig', array(
+                'apiUrl' => $api_url,
+                'siteUrl' => get_site_url(),
+                'themePath' => $theme_dir,
+            ));
         }
-    } else {
-        // Fallback: try to load index files directly (for development)
-        wp_enqueue_style('research-profile-css', $build_dir . '/assets/index.css', array(), '1.0.0');
-        wp_enqueue_script('research-profile-js', $build_dir . '/assets/index.js', array(), '1.0.0', true);
     }
-    
-    // Pass configuration to the React app
-    $api_url = get_option('research_profile_api_url', 'http://localhost:5000');
-    
-    wp_localize_script('research-profile-main', 'ResearchProfileConfig', array(
-        'apiUrl' => $api_url,
-        'siteUrl' => get_site_url(),
-        'themePath' => $theme_dir,
-    ));
 }
 add_action('wp_enqueue_scripts', 'research_profile_enqueue_scripts');
 
