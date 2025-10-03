@@ -159,12 +159,29 @@ class Research_Profile_Admin_Interface {
             return;
         }
         
-        $fields = ['openalex_id', 'bio', 'title', 'current_affiliation', 'cv_url'];
+        // Save OpenAlex ID
+        if (isset($_POST['openalex_id'])) {
+            update_post_meta($post_id, 'openalex_id', sanitize_text_field($_POST['openalex_id']));
+        }
         
-        foreach ($fields as $field) {
-            if (isset($_POST[$field])) {
-                update_post_meta($post_id, $field, sanitize_text_field($_POST[$field]));
-            }
+        // Save bio (use textarea sanitization)
+        if (isset($_POST['bio'])) {
+            update_post_meta($post_id, 'bio', sanitize_textarea_field($_POST['bio']));
+        }
+        
+        // Save title
+        if (isset($_POST['title'])) {
+            update_post_meta($post_id, 'title', sanitize_text_field($_POST['title']));
+        }
+        
+        // Save current affiliation
+        if (isset($_POST['current_affiliation'])) {
+            update_post_meta($post_id, 'current_affiliation', sanitize_text_field($_POST['current_affiliation']));
+        }
+        
+        // Save CV URL
+        if (isset($_POST['cv_url'])) {
+            update_post_meta($post_id, 'cv_url', esc_url_raw($_POST['cv_url']));
         }
     }
     
@@ -191,21 +208,30 @@ class Research_Profile_Admin_Interface {
     public function ajax_sync_researcher() {
         check_ajax_referer('research_profile_admin', 'nonce');
         
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error(['message' => __('Permission denied', 'research-profile')]);
+            return;
         }
         
-        $researcher_id = intval($_POST['researcher_id']);
+        $researcher_id = isset($_POST['researcher_id']) ? intval($_POST['researcher_id']) : 0;
+        
+        if (!$researcher_id) {
+            wp_send_json_error(['message' => __('Invalid researcher ID', 'research-profile')]);
+            return;
+        }
+        
         $openalex_id = get_post_meta($researcher_id, 'openalex_id', true);
         
-        if (!$openalex_id) {
-            wp_send_json_error(['message' => __('OpenAlex ID not set', 'research-profile')]);
+        if (empty($openalex_id)) {
+            wp_send_json_error(['message' => __('OpenAlex ID not set. Please save the researcher profile first with a valid OpenAlex ID.', 'research-profile')]);
+            return;
         }
         
         $service = new Research_Profile_OpenAlex_Service();
         $result = $service->sync_researcher_data($researcher_id, $openalex_id);
         
         if ($result['success']) {
+            update_post_meta($researcher_id, 'last_synced_at', current_time('mysql'));
             wp_send_json_success($result);
         } else {
             wp_send_json_error($result);
